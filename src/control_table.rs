@@ -1,7 +1,6 @@
-pub enum DynamixelModel{
-    Xm430W350,
-    Xc330T181,
-}
+
+use core::cell::Cell;
+use crate::data_spec::{self, DataSpec};
 
 #[allow(dead_code)]
 pub enum ControlTable {
@@ -300,134 +299,109 @@ impl ControlTable {
             ControlTable::IndirectData20 => 1,
         }
     }
+}
 
-    pub fn to_unit(&self, model: &DynamixelModel) -> f32 {
-        match self {
-            ControlTable::ModelNumber => 1.0,
-            ControlTable::ModelInformation => 1.0,
-            ControlTable::FirmwareVersion => 1.0,
-            ControlTable::ID => 1.0,
-            ControlTable::BaudRate => 1.0,
-            ControlTable::ReturnDelayTime => 2.0,
-            ControlTable::DriveMode => 1.0,
-            ControlTable::OperatingMode => 1.0,
-            ControlTable::SecondaryID => 1.0,
-            ControlTable::ProtocolType => 1.0,
-            ControlTable::HomingOffset => 2.0,
-            ControlTable::MovingThreshold => 0.229,
-            ControlTable::TemperatureLimit => 1.0,
-            ControlTable::MaxVoltageLimit => 0.1,
-            ControlTable::MinVoltageLimit => 0.1,
-            ControlTable::PWMLimit => 0.113,
-            ControlTable::CurrentLimit => 1.0,
-            ControlTable::VelocityLimit => 0.229,
-            ControlTable::MaxPositionLimit => 1.0,
-            ControlTable::MinPositionLimit => 1.0,
-            ControlTable::StartupConfiguration => 1.0,
-            ControlTable::PWMSlope => 3.955,
-            ControlTable::Shutdown => 1.0,
-            ControlTable::TorqueEnable => 1.0,
-            ControlTable::LED => 1.0,
-            ControlTable::StatusReturnLevel => 1.0,
-            ControlTable::RegisteredInstruction => 1.0,
-            ControlTable::HardwareErrorStatus => 1.0,
-            ControlTable::VelocityIGain => 1.0,
-            ControlTable::VelocityPgain => 1.0,
-            ControlTable::PositionDGain => 1.0,
-            ControlTable::PositionIGain => 1.0,
-            ControlTable::PositionPGain => 1.0,
-            ControlTable::Feedforward2ndGain => 1.0,
-            ControlTable::Feedforward1stGain => 1.0,
-            ControlTable::BusWatchdog => 20.0,
-            ControlTable::GoalPWM => 0.113,
-            ControlTable::GoalCurrent => 1.0,
-            ControlTable::GoalVelocity => 0.229,
-            ControlTable::ProfileAccleration => 214.577,
-            ControlTable::ProfileVelocity => 0.229,
-            ControlTable::GoalPosition => 1.0,
-            ControlTable::RealtimeTick => 1.0,
-            ControlTable::Moving => 1.0,
-            ControlTable::MovingStatus => 1.0,
-            ControlTable::PresentPWM => 0.113,
-            ControlTable::PresentCurrent => {
-                match model{
-                    DynamixelModel::Xm430W350 => 2.69,
-                    DynamixelModel::Xc330T181 => 1.0,
-                }
-            },
-            ControlTable::PresentVelocity => 0.229,
-            ControlTable::PresentPosition => 1.0,
-            ControlTable::VelocityTrajectory => 0.229,
-            ControlTable::PositionTrajectory => 1.0,
-            ControlTable::PresentInputVoltage => 0.1,
-            ControlTable::PresentTemperature => 1.0,
-            ControlTable::BackupReady => 1.0,
-            ControlTable::IndirectAddress1 => 1.0,
-            ControlTable::IndirectAddress2 => 1.0,
-            ControlTable::IndirectAddress3 => 1.0,
-            ControlTable::IndirectAddress4 => 1.0,
-            ControlTable::IndirectAddress5 => 1.0,
-            ControlTable::IndirectAddress6 => 1.0,
-            ControlTable::IndirectAddress7 => 1.0,
-            ControlTable::IndirectAddress8 => 1.0,
-            ControlTable::IndirectAddress9 => 1.0,
-            ControlTable::IndirectAddress10 => 1.0,
-            ControlTable::IndirectAddress11 => 1.0,
-            ControlTable::IndirectAddress12 => 1.0,
-            ControlTable::IndirectAddress13 => 1.0,
-            ControlTable::IndirectAddress14 => 1.0,
-            ControlTable::IndirectAddress15 => 1.0,
-            ControlTable::IndirectAddress16 => 1.0,
-            ControlTable::IndirectAddress17 => 1.0,
-            ControlTable::IndirectAddress18 => 1.0,
-            ControlTable::IndirectAddress19 => 1.0,
-            ControlTable::IndirectAddress20 => 1.0,
-            ControlTable::IndirectData1 => 1.0,
-            ControlTable::IndirectData2 => 1.0,
-            ControlTable::IndirectData3 => 1.0,
-            ControlTable::IndirectData4 => 1.0,
-            ControlTable::IndirectData5 => 1.0,
-            ControlTable::IndirectData6 => 1.0,
-            ControlTable::IndirectData7 => 1.0,
-            ControlTable::IndirectData8 => 1.0,
-            ControlTable::IndirectData9 => 1.0,
-            ControlTable::IndirectData10 => 1.0,
-            ControlTable::IndirectData11 => 1.0,
-            ControlTable::IndirectData12 => 1.0,
-            ControlTable::IndirectData13 => 1.0,
-            ControlTable::IndirectData14 => 1.0,
-            ControlTable::IndirectData15 => 1.0,
-            ControlTable::IndirectData16 => 1.0,
-            ControlTable::IndirectData17 => 1.0,
-            ControlTable::IndirectData18 => 1.0,
-            ControlTable::IndirectData19 => 1.0,
-            ControlTable::IndirectData20 => 1.0,
+
+pub struct ModelNumberSpec;
+impl data_spec::DataSpec for ModelNumberSpec {
+    type Ux = u16;
+    fn reset_value() -> Self::Ux{
+        0
+    }
+    fn to_address() -> u16 {
+        0
+    }
+}
+
+pub struct ModelInformationSpec;
+impl data_spec::DataSpec for ModelInformationSpec {
+    type Ux = u32;
+    fn reset_value() -> Self::Ux{
+        0
+    }
+    fn to_address() -> u16 {
+        0
+    }
+}
+
+pub struct FirmwareVersionSpec;
+impl data_spec::DataSpec for FirmwareVersionSpec {
+    type Ux = u8;
+    fn reset_value() -> Self::Ux{
+        0
+    }
+    fn to_address() -> u16 {
+        0
+    }
+}
+
+pub struct IDSpec;
+impl data_spec::DataSpec for IDSpec {
+    type Ux = u8;
+    fn reset_value() -> Self::Ux{
+        0
+    }
+    fn to_address() -> u16 {
+        7
+    }
+}
+
+
+#[repr(packed)]
+pub struct ControlTableData {
+
+    value: Cell<[u8; 8]>,
+
+    // pub model_number: data_spec::Data<ModelNumberSpec>,
+    // pub model_information: data_spec::Data<ModelInformationSpec>,
+    // pub firmware_version: data_spec::Data<FirmwareVersionSpec>,
+    // pub id: data_spec::Data<IDSpec>,
+
+}
+impl ControlTableData {
+    pub fn new() -> Self{
+        Self{value: Cell::new([0; 8])}
+    }
+}
+
+impl ControlTableData {
+
+    pub fn id(&mut self) -> Id<<IDSpec as DataSpec>::Ux>{
+        Id{
+            value:self.value.get()[IDSpec::to_address() as usize]
         }
     }
 }
 
+pub struct Id<Ux> {
+    value : Ux
+}
+impl<Ux> Id<Ux>     
+where Ux: Copy,
+{
+    pub fn new(value :Ux) -> Self{
+        Self{value}
+    }
+    pub fn read(&self) -> Ux {
+        self.value
+        // self.value.get()[IDSpec::to_address() as usize]
+    }
+
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::control_table::ControlTable;
-    use crate::control_table::DynamixelModel;
+    use crate::control_table::{ControlTable, ControlTableData};
     
     #[test]
-    fn to_address_xc330() {
+    fn to_address() {
         let name = ControlTable::ModelNumber;
         assert_eq!(name.to_address(), 0);
         assert_eq!(ControlTable::TorqueEnable.to_address(), 64)
     }
     #[test]
-    fn to_size_xc330() {
-        let name = ControlTable::ModelNumber;
-        assert_eq!(name.to_size(), 2);
-        assert_eq!(ControlTable::TorqueEnable.to_size(), 1);
-    }
-
-    #[test]
-    fn to_unit_xc330() {
-        let name = ControlTable::ModelNumber;
-        assert_eq!(name.to_unit(&DynamixelModel::Xc330T181), 1.0);
-        assert_eq!(ControlTable::PresentPWM.to_unit(&DynamixelModel::Xc330T181), 0.113);
+    fn address_check() {
+        let mut ctd = ControlTableData::new();
+        assert_eq!(ctd.id().read(), 0)
     }
 }

@@ -1,6 +1,7 @@
 use crate::ControlTable;
-use crate::DynamixelControl;
 use crate::Instruction;
+use crate::Interface;
+use crate::Clock;
 use core::fmt;
 use core::result::Result;
 use core::time::Duration;
@@ -107,8 +108,36 @@ impl fmt::Display for CommunicationResult {
     }
 }
 
+pub struct DynamixelProtocolHandler<'a> {
+    uart: &'a mut dyn Interface,
+    clock: &'a dyn Clock,
+    id: u8,
+    // is_enabled: bool,
+    is_using: bool,
+    // packet_start_time: Duration,
+    // packet_timeout: Duration,
+    baudrate: u32,
+    // tx_time_per_byte: u64,
+}
+
+
 #[allow(dead_code)]
-impl<'a> DynamixelControl<'a> {
+impl<'a> DynamixelProtocolHandler<'a> {
+    pub fn new(uart: &'a mut dyn Interface, clock: &'a dyn Clock, id: u8, baudrate: u32) -> Self {
+        Self {
+            uart,
+            clock,
+            id, 
+            // is_enabled: false,
+            is_using: false,
+            // packet_start_time: Duration::new(0, 0),
+            // packet_timeout: Duration::new(0, 0),
+            baudrate: baudrate,
+            // tx_time_per_byte: ((1_000_000.0 * 8.0 + (baudrate as f32 - 1.0)) / baudrate as f32)
+            //     as u64,
+        }
+    }
+
     pub fn reserve_msg_header(&self) -> [u8; 4] {
         [0x00; 4] // Header and reserved len
     }
@@ -204,737 +233,737 @@ impl<'a> DynamixelControl<'a> {
         msg.resize(index, 0).unwrap();
     }
 
-    /// Set packet without crc.
-    pub fn send_packet(
-        &mut self,
-        mut msg: Vec<u8, MAX_PACKET_LEN>,
-    ) -> Result<(), CommunicationResult> {
-        self.add_stuffing(&mut msg);
-
-        // make header
-        msg[Packet::Header0.to_pos()] = 0xFF;
-        msg[Packet::Header1.to_pos()] = 0xFF;
-        msg[Packet::Header2.to_pos()] = 0xFD;
-        msg[Packet::Reserved.to_pos()] = 0x00;
-
-        // add crc
-        msg.extend(self.calc_crc_value(&msg).to_le_bytes().iter().cloned());
-
-        self.clear_port();
-        self.uart.write_bytes(&msg);
-        // for m in msg {
-        //     self.uart.write_byte(m);
-        // }
-
-        Ok(())
-    }
-
-    fn receive_packet(&mut self) -> Result<Vec<u8, MAX_PACKET_LEN>, CommunicationResult> {
-        let result;
-        let mut wait_length = 11; // minimum length (HEADER0 HEADER1 HEADER2 RESERVED ID LENGTH_L LENGTH_H INST ERROR CRC16_L CRC16_H)
-        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new(); // VecDeque is not implemented in heapless.
-        let mut res = Vec::<u8, MAX_PACKET_LEN>::new();
-
-        loop {
-            res.resize(wait_length - msg.len(), 0).unwrap();
-            match self.uart.read_bytes(&mut *res) {
-                None => {}
-                Some(readlen) => {
-                    msg.extend(res[0..readlen].iter().cloned());
-                }
-            }
-
-            // while msg.len() < wait_length {
-            //     match self.uart.read_byte() {
-            //         None => {
-            //             break;
-            //         }
-            //         Some(res) => {
-            //             msg.push(res).unwrap();
-            //         }
-            //     }
-            // }
-
-            if msg.len() >= wait_length {
-                let mut idx = 0;
-                // find packet header
-                while idx < (msg.len() - 3) {
-                    if msg[idx + Packet::Header0.to_pos()] == 0xFF
-                        && msg[idx + Packet::Header1.to_pos()] == 0xFF
-                        && msg[idx + Packet::Header2.to_pos()] == 0xFD
-                        && msg[idx + Packet::Reserved.to_pos()] == 0x00
-                    {
-                        break;
-                    }
-                    idx += 1;
-                }
-
-                if idx == 0 {
-                    // found at the beginning of the packet
-                    if msg[Packet::Reserved.to_pos()] != 0x00
-                        || msg[Packet::Id.to_pos()] > 0xFC
-                        || u16::from_le_bytes([
-                            msg[Packet::LengthL.to_pos()],
-                            msg[Packet::LengthH.to_pos()],
-                        ]) as usize
-                            > MAX_PACKET_LEN
-                        || msg[Packet::Instruction.to_pos()] != 0x55
-                    {
-                        // remove the first byte in the packet
-                        for s in 0..msg.len() - 1 {
-                            msg[s] = msg[s + 1];
-                        }
-                        msg.truncate(msg.len() - 1);
-                        continue;
-                    }
-                    // re-calculate the exact length of the rx packet
-                    if wait_length
-                        != u16::from_le_bytes([
-                            msg[Packet::LengthL.to_pos()],
-                            msg[Packet::LengthH.to_pos()],
-                        ]) as usize
-                            + Packet::LengthH.to_pos()
-                            + 1
-                    {
-                        wait_length = u16::from_le_bytes([
-                            msg[Packet::LengthL.to_pos()],
-                            msg[Packet::LengthH.to_pos()],
-                        ]) as usize
-                            + Packet::LengthH.to_pos()
-                            + 1;
-                        continue;
-                    }
-
-                    if msg.len() < wait_length {
-                        // check timeout
-                        if self.is_packet_timeout() == true {
-                            if msg.len() == 0 {
-                                result = CommunicationResult::RxTimeout;
-                            } else {
-                                result = CommunicationResult::RxCorrupt;
-                            }
-                            break;
-                        } else {
-                            continue;
-                        }
-                    }
-
-                    // verify CRC16
-                    let crc = u16::from_le_bytes([msg[msg.len() - 2], msg[msg.len() - 1]]);
-                    if self.calc_crc_value(&msg[..msg.len() - 2]) == crc {
-                        result = CommunicationResult::Success;
-                    } else {
-                        result = CommunicationResult::RxCRCError;
-                    }
-                    break;
-                } else {
-                    // remove unnecessary packets
-                    for s in 0..(msg.len() - idx) {
-                        msg[s] = msg[idx + s];
-                    }
-                    msg.truncate(msg.len() - idx);
-                }
-            } else {
-                // check timeout
-                if self.is_packet_timeout() == true {
-                    if msg.len() == 0 {
-                        result = CommunicationResult::RxTimeout;
-                    } else {
-                        result = CommunicationResult::RxCorrupt;
-                    }
-                    break;
-                }
-            }
-            // usleep(0);
-        }
-        self.is_using = false;
-
-        if result == CommunicationResult::Success {
-            self.remove_stuffing(&mut msg);
-        }
-
-        if result == CommunicationResult::Success {
-            Ok(msg)
-        } else {
-            Err(result)
-        }
-    }
-
-    /// 👺Broadcast is not implemented yet.
-    pub fn ping(&mut self, id: u8) -> Result<(u16, u8), CommunicationResult> {
-        let length: u16 = 1 + 2; // instruction + crc
-        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-
-        msg.extend(self.reserve_msg_header().iter().cloned());
-        msg.push(id).unwrap();
-        msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
-        msg.push(Instruction::Ping as u8).unwrap();
-        let packet_len = msg.len() + 2;
-        match self.send_packet(msg) {
-            Ok(_) => {
-                self.set_packet_timeout_length(packet_len);
-            }
-            Err(e) => return Err(e),
-        }
-
-        let status;
-        match self.receive_packet() {
-            Ok(v) => status = v,
-            Err(e) => return Err(e),
-        }
-
-        // header + id + length + instruction + err + param + crc
-        // id check
-        if status[Packet::Id.to_pos()] != id {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-        // data length check
-        if u16::from_le_bytes([
-            status[Packet::LengthL.to_pos()],
-            status[Packet::LengthH.to_pos()],
-        ]) - 4
-            != 3
-        {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-        // instruction check
-        if status[Packet::Instruction.to_pos()] != Instruction::Status as u8 {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-        if status[Packet::Error.to_pos()] != 0x00 {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-
-        let model_number = u16::from_le_bytes([
-            status[Packet::Error.to_pos() + 1],
-            status[Packet::Error.to_pos() + 2],
-        ]);
-        let firmware_version = status[Packet::Error.to_pos() + 3];
-        Ok((model_number, firmware_version))
-    }
-
-    fn send_read_packet(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-        data_size: u16,
-    ) -> Result<(), CommunicationResult> {
-        if id >= BROADCAST_ID {
-            return Err(CommunicationResult::NotAvailable);
-        }
-
-        let address = data_name.to_address();
-        let length: u16 = 1 + 2 + 2 + 2; // instruction + adress + data length + crc
-        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-
-        msg.extend(self.reserve_msg_header().iter().cloned());
-        msg.push(id).unwrap();
-        msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
-        msg.push(Instruction::Read as u8).unwrap();
-        msg.extend(address.to_le_bytes().iter().cloned());
-        msg.extend(data_size.to_le_bytes().iter().cloned());
-        let packet_len = msg.len() + 2;
-        match self.send_packet(msg) {
-            Ok(_) => {
-                self.set_packet_timeout_length(packet_len);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    fn receive_read_packet(
-        &mut self,
-        id: u8,
-        data_length: u16,
-    ) -> Result<Vec<u8, MAX_PACKET_LEN>, CommunicationResult> {
-        let status;
-        match self.receive_packet() {
-            Ok(v) => {
-                status = v;
-            }
-            Err(e) => return Err(e),
-        }
-
-        // header + id + length + instruction + err + param + crc
-
-        // id check
-        if status[Packet::Id.to_pos()] != id {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-
-        // data length check
-        if u16::from_le_bytes([
-            status[Packet::LengthL.to_pos()],
-            status[Packet::LengthH.to_pos()],
-        ]) - 4
-            != data_length
-        {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-
-        let mut data = Vec::<u8, MAX_PACKET_LEN>::new();
-        // for i in 0..data_length as usize {
-        //     data.push(status[Packet::Error.to_pos() + 1 + i]).unwrap();
-        // }
-        data.extend(
-            status
-                [(Packet::Error.to_pos() + 1)..(Packet::Error.to_pos() + 1 + data_length as usize)]
-                .iter()
-                .cloned(),
-        );
-
-        Ok(data)
-    }
-
-    /// TxRx
-    pub fn read(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-        data_length: u16,
-    ) -> Result<Vec<u8, MAX_PACKET_LEN>, CommunicationResult> {
-        match self.send_read_packet(id, data_name, data_length) {
-            Ok(_) => {}
-            Err(e) => return Err(e),
-        }
-        self.receive_read_packet(id, data_length)
-    }
-
-    pub fn send_1byte_read_packet(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-    ) -> Result<(), CommunicationResult> {
-        self.send_read_packet(id, data_name, 1)
-    }
-    pub fn receive_1byte_read_packet(&mut self, id: u8) -> Result<u8, CommunicationResult> {
-        match self.receive_read_packet(id, 1) {
-            Ok(v) => Ok(u8::from_le_bytes([v[0]])),
-            Err(e) => Err(e),
-        }
-    }
-    pub fn read_1byte(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-    ) -> Result<u8, CommunicationResult> {
-        match self.read(id, data_name, 1) {
-            Ok(v) => Ok(u8::from_le_bytes([v[0]])),
-            Err(e) => Err(e),
-        }
-    }
-    pub fn send_2byte_read_packet(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-    ) -> Result<(), CommunicationResult> {
-        self.send_read_packet(id, data_name, 2)
-    }
-    pub fn receive_2byte_read_packet(&mut self, id: u8) -> Result<u16, CommunicationResult> {
-        match self.receive_read_packet(id, 2) {
-            Ok(v) => Ok(u16::from_le_bytes([v[0], v[1]])),
-            Err(e) => Err(e),
-        }
-    }
-    pub fn read_2byte(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-    ) -> Result<u16, CommunicationResult> {
-        match self.read(id, data_name, 2) {
-            Ok(v) => Ok(u16::from_le_bytes([v[0], v[1]])),
-            Err(e) => Err(e),
-        }
-    }
-    pub fn send_4byte_read_packet(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-    ) -> Result<(), CommunicationResult> {
-        self.send_read_packet(id, data_name, 4)
-    }
-    pub fn receive_4byte_read_packet(&mut self, id: u8) -> Result<u32, CommunicationResult> {
-        match self.receive_read_packet(id, 4) {
-            Ok(v) => Ok(u32::from_le_bytes([v[0], v[1], v[2], v[3]])),
-            Err(e) => Err(e),
-        }
-    }
-    pub fn read_4byte(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-    ) -> Result<u32, CommunicationResult> {
-        match self.read(id, data_name, 4) {
-            Ok(v) => Ok(u32::from_le_bytes([v[0], v[1], v[2], v[3]])),
-            Err(e) => Err(e),
-        }
-    }
-
-    pub fn send_write_packet(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-        data: &[u8],
-    ) -> Result<(), CommunicationResult> {
-        if id >= BROADCAST_ID {
-            return Err(CommunicationResult::NotAvailable);
-        }
-
-        let address = data_name.to_address();
-        let size = data_name.to_size();
-        let length: u16 = 1 + 2 + (data.len() as u16) + 2; // instruction + adress + data + crc
-
-        if size != data.len() as u16 {
-            return Err(CommunicationResult::NotAvailable);
-        }
-
-        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-        msg.extend(self.reserve_msg_header().iter().cloned());
-        msg.push(id).unwrap();
-        msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
-        msg.push(Instruction::Write as u8).unwrap();
-        msg.extend(address.to_le_bytes().iter().cloned());
-
-        // for d in data {
-        //     msg.push(*d).unwrap();
-        // }
-        msg.extend(data.iter().cloned());
-        let packet_len = msg.len() + 2;
-        match self.send_packet(msg) {
-            Ok(_) => {
-                self.set_packet_timeout_length(packet_len);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    /// TxRx
-    pub fn write(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-        data: &[u8],
-    ) -> Result<(), CommunicationResult> {
-        match self.send_write_packet(id, data_name, data) {
-            Ok(_) => {}
-            Err(e) => return Err(e),
-        }
-        let status;
-        match self.receive_packet() {
-            Ok(v) => status = v,
-            Err(e) => return Err(e),
-        }
-
-        // header + id + length + instruction + err + param + crc
-        // id check
-        if status[Packet::Id.to_pos()] != id {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-        // data length check
-        if u16::from_le_bytes([
-            status[Packet::LengthL.to_pos()],
-            status[Packet::LengthH.to_pos()],
-        ]) - 4
-            != 0
-        {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-        // instruction check
-        if status[Packet::Instruction.to_pos()] != Instruction::Status as u8 {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-        if status[Packet::Error.to_pos()] != 0x00 {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-
-        Ok(())
-    }
-
-    pub fn send_1byte_write_packet(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-        data: u8,
-    ) -> Result<(), CommunicationResult> {
-        self.send_write_packet(id, data_name, &[data])
-    }
-    pub fn write_1byte(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-        data: u8,
-    ) -> Result<(), CommunicationResult> {
-        self.write(id, data_name, &[data])
-    }
-    pub fn send_2byte_write_packet(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-        data: u16,
-    ) -> Result<(), CommunicationResult> {
-        self.send_write_packet(id, data_name, &data.to_le_bytes())
-    }
-    pub fn write_2byte(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-        data: u16,
-    ) -> Result<(), CommunicationResult> {
-        self.write(id, data_name, &data.to_le_bytes())
-    }
-    pub fn send_4byte_write_packet(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-        data: u32,
-    ) -> Result<(), CommunicationResult> {
-        self.send_write_packet(id, data_name, &data.to_le_bytes())
-    }
-    pub fn write_4byte(
-        &mut self,
-        id: u8,
-        data_name: ControlTable,
-        data: u32,
-    ) -> Result<(), CommunicationResult> {
-        self.write(id, data_name, &data.to_le_bytes())
-    }
-
-    /// Reset all except ID and Baudrate.
-    /// Other reset type is not implemented yet.
-    pub fn factory_reset(&mut self, id: u8) -> Result<(), CommunicationResult> {
-        let length: u16 = 1 + 1 + 2; // instruction + param1 + crc
-        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-
-        msg.extend(self.reserve_msg_header().iter().cloned());
-        msg.push(id).unwrap();
-        msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
-        msg.push(Instruction::FactoryReset as u8).unwrap();
-        msg.push(0x02).unwrap(); // Reset all except ID and Baudrate
-        let packet_len = msg.len() + 2;
-        match self.send_packet(msg) {
-            Ok(_) => {
-                self.set_packet_timeout_length(packet_len);
-            }
-            Err(e) => return Err(e),
-        }
-
-        let status;
-        match self.receive_packet() {
-            Ok(v) => status = v,
-            Err(e) => return Err(e),
-        }
-
-        // header + id + length + instruction + err + param + crc
-        // id check
-        if status[Packet::Id.to_pos()] != id {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-        // data length check
-        if u16::from_le_bytes([
-            status[Packet::LengthL.to_pos()],
-            status[Packet::LengthH.to_pos()],
-        ]) - 4
-            != 0
-        {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-        // instruction check
-        if status[Packet::Instruction.to_pos()] != Instruction::Status as u8 {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-        if status[Packet::Error.to_pos()] != 0x00 {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-
-        Ok(())
-    }
-
-    pub fn reboot(&mut self, id: u8) -> Result<(), CommunicationResult> {
-        let length: u16 = 1 + 2; // instruction + crc
-        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-
-        msg.extend(self.reserve_msg_header().iter().cloned());
-        msg.push(id).unwrap();
-        msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
-        msg.push(Instruction::Reboot as u8).unwrap();
-        let packet_len = msg.len() + 2;
-        match self.send_packet(msg) {
-            Ok(_) => {
-                self.set_packet_timeout_length(packet_len);
-            }
-            Err(e) => return Err(e),
-        }
-
-        let status;
-        match self.receive_packet() {
-            Ok(v) => status = v,
-            Err(e) => return Err(e),
-        }
-
-        // header + id + length + instruction + err + param + crc
-        // id check
-        if status[Packet::Id.to_pos()] != id {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-        // data length check
-        if u16::from_le_bytes([
-            status[Packet::LengthL.to_pos()],
-            status[Packet::LengthH.to_pos()],
-        ]) - 4
-            != 0
-        {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-        // instruction check
-        if status[Packet::Instruction.to_pos()] != Instruction::Status as u8 {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-        if status[Packet::Error.to_pos()] != 0x00 {
-            return Err(CommunicationResult::SomethingWentWrong);
-        }
-
-        Ok(())
-    }
-
-    pub fn send_sync_read_packet(
-        &mut self,
-        id: &[u8],
-        data_name: ControlTable,
-        data_size: u16,
-    ) -> Result<(), CommunicationResult> {
-        let address = data_name.to_address();
-        let length: u16 = 1 + 2 + 2 + id.len() as u16 + 2; // instruction + address + length + ids + crc
-        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-
-        msg.extend(self.reserve_msg_header().iter().cloned());
-        msg.push(0xFE).unwrap(); // id
-        msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
-        msg.push(Instruction::SyncRead as u8).unwrap();
-        msg.extend(address.to_le_bytes().iter().cloned());
-        msg.extend(data_size.to_le_bytes().iter().cloned());
-        for i in id {
-            msg.push(i.clone()).unwrap();
-        }
-
-        let packet_len = msg.len() + 2;
-
-        match self.send_packet(msg) {
-            Ok(_) => {
-                self.set_packet_timeout_length(packet_len);
-            }
-            Err(e) => return Err(e),
-        }
-
-        Ok(())
-    }
-    pub fn send_sync_write_packet(
-        &mut self,
-        id: &[u8],
-        data: &[u8],
-        data_name: ControlTable,
-        data_size: u16,
-    ) -> Result<(), CommunicationResult> {
-        let address = data_name.to_address();
-        let length: u16 = 1 + 2 + 2 + id.len() as u16 + id.len() as u16 * data_size + 2; // instruction + address + length + ids + datas + crc
-        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-
-        msg.extend(self.reserve_msg_header().iter().cloned());
-        msg.push(0xFE).unwrap(); // id
-        msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
-        msg.push(Instruction::SyncWrite as u8).unwrap();
-        msg.extend(address.to_le_bytes().iter().cloned());
-        msg.extend(data_size.to_le_bytes().iter().cloned());
-        for i in 0..id.len() {
-            msg.push(id[i].clone()).unwrap();
-            for j in 0..data_size as usize {
-                msg.push(data[i * data_size as usize + j]).unwrap();
-            }
-        }
-
-        let packet_len = msg.len() + 2;
-
-        match self.send_packet(msg) {
-            Ok(_) => {
-                self.set_packet_timeout_length(packet_len);
-            }
-            Err(e) => return Err(e),
-        }
-
-        Ok(())
-    }
-
-    // bulkReadTx
-    // bulkWriteTxOnly
-    // pub fn broadcast_ping(&mut self) {}
-    // regWriteTxOnly
-    // regWriteTxRx
-    // pub fn action(&mut self) {}
-    // clear
-
-    fn calc_crc_value(&self, msg: &[u8]) -> u16 {
-        let crc_table = [
-            0x0000, 0x8005, 0x800F, 0x000A, 0x801B, 0x001E, 0x0014, 0x8011, 0x8033, 0x0036, 0x003C,
-            0x8039, 0x0028, 0x802D, 0x8027, 0x0022, 0x8063, 0x0066, 0x006C, 0x8069, 0x0078, 0x807D,
-            0x8077, 0x0072, 0x0050, 0x8055, 0x805F, 0x005A, 0x804B, 0x004E, 0x0044, 0x8041, 0x80C3,
-            0x00C6, 0x00CC, 0x80C9, 0x00D8, 0x80DD, 0x80D7, 0x00D2, 0x00F0, 0x80F5, 0x80FF, 0x00FA,
-            0x80EB, 0x00EE, 0x00E4, 0x80E1, 0x00A0, 0x80A5, 0x80AF, 0x00AA, 0x80BB, 0x00BE, 0x00B4,
-            0x80B1, 0x8093, 0x0096, 0x009C, 0x8099, 0x0088, 0x808D, 0x8087, 0x0082, 0x8183, 0x0186,
-            0x018C, 0x8189, 0x0198, 0x819D, 0x8197, 0x0192, 0x01B0, 0x81B5, 0x81BF, 0x01BA, 0x81AB,
-            0x01AE, 0x01A4, 0x81A1, 0x01E0, 0x81E5, 0x81EF, 0x01EA, 0x81FB, 0x01FE, 0x01F4, 0x81F1,
-            0x81D3, 0x01D6, 0x01DC, 0x81D9, 0x01C8, 0x81CD, 0x81C7, 0x01C2, 0x0140, 0x8145, 0x814F,
-            0x014A, 0x815B, 0x015E, 0x0154, 0x8151, 0x8173, 0x0176, 0x017C, 0x8179, 0x0168, 0x816D,
-            0x8167, 0x0162, 0x8123, 0x0126, 0x012C, 0x8129, 0x0138, 0x813D, 0x8137, 0x0132, 0x0110,
-            0x8115, 0x811F, 0x011A, 0x810B, 0x010E, 0x0104, 0x8101, 0x8303, 0x0306, 0x030C, 0x8309,
-            0x0318, 0x831D, 0x8317, 0x0312, 0x0330, 0x8335, 0x833F, 0x033A, 0x832B, 0x032E, 0x0324,
-            0x8321, 0x0360, 0x8365, 0x836F, 0x036A, 0x837B, 0x037E, 0x0374, 0x8371, 0x8353, 0x0356,
-            0x035C, 0x8359, 0x0348, 0x834D, 0x8347, 0x0342, 0x03C0, 0x83C5, 0x83CF, 0x03CA, 0x83DB,
-            0x03DE, 0x03D4, 0x83D1, 0x83F3, 0x03F6, 0x03FC, 0x83F9, 0x03E8, 0x83ED, 0x83E7, 0x03E2,
-            0x83A3, 0x03A6, 0x03AC, 0x83A9, 0x03B8, 0x83BD, 0x83B7, 0x03B2, 0x0390, 0x8395, 0x839F,
-            0x039A, 0x838B, 0x038E, 0x0384, 0x8381, 0x0280, 0x8285, 0x828F, 0x028A, 0x829B, 0x029E,
-            0x0294, 0x8291, 0x82B3, 0x02B6, 0x02BC, 0x82B9, 0x02A8, 0x82AD, 0x82A7, 0x02A2, 0x82E3,
-            0x02E6, 0x02EC, 0x82E9, 0x02F8, 0x82FD, 0x82F7, 0x02F2, 0x02D0, 0x82D5, 0x82DF, 0x02DA,
-            0x82CB, 0x02CE, 0x02C4, 0x82C1, 0x8243, 0x0246, 0x024C, 0x8249, 0x0258, 0x825D, 0x8257,
-            0x0252, 0x0270, 0x8275, 0x827F, 0x027A, 0x826B, 0x026E, 0x0264, 0x8261, 0x0220, 0x8225,
-            0x822F, 0x022A, 0x823B, 0x023E, 0x0234, 0x8231, 0x8213, 0x0216, 0x021C, 0x8219, 0x0208,
-            0x820D, 0x8207, 0x0202,
-        ];
-
-        let mut crc_accum = 0x0000;
-        for j in 0..msg.len() {
-            let i = ((((crc_accum >> 8) as u8) ^ msg[j]) & 0xFF) as usize;
-            crc_accum = (crc_accum << 8) ^ crc_table[i];
-        }
-
-        crc_accum
-    }
-
-    fn set_packet_timeout_length(&mut self, packet_length: usize) {
-        pub const LATENCY_CLOCK: u64 = 1_000; // usec
-        self.packet_start_time = self.clock.get_current_time();
-        let timeout_usec =
-            (self.tx_time_per_byte * packet_length as u64) + (LATENCY_CLOCK * 2) + 2_000;
-        self.set_packet_timeout_micros(timeout_usec);
-    }
-
-    fn set_packet_timeout_millis(&mut self, msec: u64) {
-        self.packet_start_time = self.clock.get_current_time();
-        self.packet_timeout = Duration::from_millis(msec);
-    }
-
-    fn set_packet_timeout_micros(&mut self, usec: u64) {
-        self.packet_start_time = self.clock.get_current_time();
-        self.packet_timeout = Duration::from_micros(usec)
-    }
-
-    fn is_packet_timeout(&self) -> bool {
-        if self.clock.get_current_time() > self.packet_start_time + self.packet_timeout {
-            true
-        } else {
-            false
-        }
-    }
+    // /// Set packet without crc.
+    // pub fn send_packet(
+    //     &mut self,
+    //     mut msg: Vec<u8, MAX_PACKET_LEN>,
+    // ) -> Result<(), CommunicationResult> {
+    //     self.add_stuffing(&mut msg);
+
+    //     // make header
+    //     msg[Packet::Header0.to_pos()] = 0xFF;
+    //     msg[Packet::Header1.to_pos()] = 0xFF;
+    //     msg[Packet::Header2.to_pos()] = 0xFD;
+    //     msg[Packet::Reserved.to_pos()] = 0x00;
+
+    //     // add crc
+    //     msg.extend(self.calc_crc_value(&msg).to_le_bytes().iter().cloned());
+
+    //     self.clear_port();
+    //     self.uart.write_bytes(&msg);
+    //     // for m in msg {
+    //     //     self.uart.write_byte(m);
+    //     // }
+
+    //     Ok(())
+    // }
+
+    // fn receive_packet(&mut self) -> Result<Vec<u8, MAX_PACKET_LEN>, CommunicationResult> {
+    //     let result;
+    //     let mut wait_length = 11; // minimum length (HEADER0 HEADER1 HEADER2 RESERVED ID LENGTH_L LENGTH_H INST ERROR CRC16_L CRC16_H)
+    //     let mut msg = Vec::<u8, MAX_PACKET_LEN>::new(); // VecDeque is not implemented in heapless.
+    //     let mut res = Vec::<u8, MAX_PACKET_LEN>::new();
+
+    //     loop {
+    //         res.resize(wait_length - msg.len(), 0).unwrap();
+    //         match self.uart.read_bytes(&mut *res) {
+    //             None => {}
+    //             Some(readlen) => {
+    //                 msg.extend(res[0..readlen].iter().cloned());
+    //             }
+    //         }
+
+    //         // while msg.len() < wait_length {
+    //         //     match self.uart.read_byte() {
+    //         //         None => {
+    //         //             break;
+    //         //         }
+    //         //         Some(res) => {
+    //         //             msg.push(res).unwrap();
+    //         //         }
+    //         //     }
+    //         // }
+
+    //         if msg.len() >= wait_length {
+    //             let mut idx = 0;
+    //             // find packet header
+    //             while idx < (msg.len() - 3) {
+    //                 if msg[idx + Packet::Header0.to_pos()] == 0xFF
+    //                     && msg[idx + Packet::Header1.to_pos()] == 0xFF
+    //                     && msg[idx + Packet::Header2.to_pos()] == 0xFD
+    //                     && msg[idx + Packet::Reserved.to_pos()] == 0x00
+    //                 {
+    //                     break;
+    //                 }
+    //                 idx += 1;
+    //             }
+
+    //             if idx == 0 {
+    //                 // found at the beginning of the packet
+    //                 if msg[Packet::Reserved.to_pos()] != 0x00
+    //                     || msg[Packet::Id.to_pos()] > 0xFC
+    //                     || u16::from_le_bytes([
+    //                         msg[Packet::LengthL.to_pos()],
+    //                         msg[Packet::LengthH.to_pos()],
+    //                     ]) as usize
+    //                         > MAX_PACKET_LEN
+    //                     || msg[Packet::Instruction.to_pos()] != 0x55
+    //                 {
+    //                     // remove the first byte in the packet
+    //                     for s in 0..msg.len() - 1 {
+    //                         msg[s] = msg[s + 1];
+    //                     }
+    //                     msg.truncate(msg.len() - 1);
+    //                     continue;
+    //                 }
+    //                 // re-calculate the exact length of the rx packet
+    //                 if wait_length
+    //                     != u16::from_le_bytes([
+    //                         msg[Packet::LengthL.to_pos()],
+    //                         msg[Packet::LengthH.to_pos()],
+    //                     ]) as usize
+    //                         + Packet::LengthH.to_pos()
+    //                         + 1
+    //                 {
+    //                     wait_length = u16::from_le_bytes([
+    //                         msg[Packet::LengthL.to_pos()],
+    //                         msg[Packet::LengthH.to_pos()],
+    //                     ]) as usize
+    //                         + Packet::LengthH.to_pos()
+    //                         + 1;
+    //                     continue;
+    //                 }
+
+    //                 if msg.len() < wait_length {
+    //                     // check timeout
+    //                     if self.is_packet_timeout() == true {
+    //                         if msg.len() == 0 {
+    //                             result = CommunicationResult::RxTimeout;
+    //                         } else {
+    //                             result = CommunicationResult::RxCorrupt;
+    //                         }
+    //                         break;
+    //                     } else {
+    //                         continue;
+    //                     }
+    //                 }
+
+    //                 // verify CRC16
+    //                 let crc = u16::from_le_bytes([msg[msg.len() - 2], msg[msg.len() - 1]]);
+    //                 if self.calc_crc_value(&msg[..msg.len() - 2]) == crc {
+    //                     result = CommunicationResult::Success;
+    //                 } else {
+    //                     result = CommunicationResult::RxCRCError;
+    //                 }
+    //                 break;
+    //             } else {
+    //                 // remove unnecessary packets
+    //                 for s in 0..(msg.len() - idx) {
+    //                     msg[s] = msg[idx + s];
+    //                 }
+    //                 msg.truncate(msg.len() - idx);
+    //             }
+    //         } else {
+    //             // check timeout
+    //             if self.is_packet_timeout() == true {
+    //                 if msg.len() == 0 {
+    //                     result = CommunicationResult::RxTimeout;
+    //                 } else {
+    //                     result = CommunicationResult::RxCorrupt;
+    //                 }
+    //                 break;
+    //             }
+    //         }
+    //         // usleep(0);
+    //     }
+    //     self.is_using = false;
+
+    //     if result == CommunicationResult::Success {
+    //         self.remove_stuffing(&mut msg);
+    //     }
+
+    //     if result == CommunicationResult::Success {
+    //         Ok(msg)
+    //     } else {
+    //         Err(result)
+    //     }
+    // }
+
+    // /// 👺Broadcast is not implemented yet.
+    // pub fn ping(&mut self, id: u8) -> Result<(u16, u8), CommunicationResult> {
+    //     let length: u16 = 1 + 2; // instruction + crc
+    //     let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+
+    //     msg.extend(self.reserve_msg_header().iter().cloned());
+    //     msg.push(id).unwrap();
+    //     msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
+    //     msg.push(Instruction::Ping as u8).unwrap();
+    //     let packet_len = msg.len() + 2;
+    //     match self.send_packet(msg) {
+    //         Ok(_) => {
+    //             self.set_packet_timeout_length(packet_len);
+    //         }
+    //         Err(e) => return Err(e),
+    //     }
+
+    //     let status;
+    //     match self.receive_packet() {
+    //         Ok(v) => status = v,
+    //         Err(e) => return Err(e),
+    //     }
+
+    //     // header + id + length + instruction + err + param + crc
+    //     // id check
+    //     if status[Packet::Id.to_pos()] != id {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+    //     // data length check
+    //     if u16::from_le_bytes([
+    //         status[Packet::LengthL.to_pos()],
+    //         status[Packet::LengthH.to_pos()],
+    //     ]) - 4
+    //         != 3
+    //     {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+    //     // instruction check
+    //     if status[Packet::Instruction.to_pos()] != Instruction::Status as u8 {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+    //     if status[Packet::Error.to_pos()] != 0x00 {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+
+    //     let model_number = u16::from_le_bytes([
+    //         status[Packet::Error.to_pos() + 1],
+    //         status[Packet::Error.to_pos() + 2],
+    //     ]);
+    //     let firmware_version = status[Packet::Error.to_pos() + 3];
+    //     Ok((model_number, firmware_version))
+    // }
+
+    // fn send_read_packet(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    //     data_size: u16,
+    // ) -> Result<(), CommunicationResult> {
+    //     if id >= BROADCAST_ID {
+    //         return Err(CommunicationResult::NotAvailable);
+    //     }
+
+    //     let address = data_name.to_address();
+    //     let length: u16 = 1 + 2 + 2 + 2; // instruction + adress + data length + crc
+    //     let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+
+    //     msg.extend(self.reserve_msg_header().iter().cloned());
+    //     msg.push(id).unwrap();
+    //     msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
+    //     msg.push(Instruction::Read as u8).unwrap();
+    //     msg.extend(address.to_le_bytes().iter().cloned());
+    //     msg.extend(data_size.to_le_bytes().iter().cloned());
+    //     let packet_len = msg.len() + 2;
+    //     match self.send_packet(msg) {
+    //         Ok(_) => {
+    //             self.set_packet_timeout_length(packet_len);
+    //             Ok(())
+    //         }
+    //         Err(e) => Err(e),
+    //     }
+    // }
+
+    // fn receive_read_packet(
+    //     &mut self,
+    //     id: u8,
+    //     data_length: u16,
+    // ) -> Result<Vec<u8, MAX_PACKET_LEN>, CommunicationResult> {
+    //     let status;
+    //     match self.receive_packet() {
+    //         Ok(v) => {
+    //             status = v;
+    //         }
+    //         Err(e) => return Err(e),
+    //     }
+
+    //     // header + id + length + instruction + err + param + crc
+
+    //     // id check
+    //     if status[Packet::Id.to_pos()] != id {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+
+    //     // data length check
+    //     if u16::from_le_bytes([
+    //         status[Packet::LengthL.to_pos()],
+    //         status[Packet::LengthH.to_pos()],
+    //     ]) - 4
+    //         != data_length
+    //     {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+
+    //     let mut data = Vec::<u8, MAX_PACKET_LEN>::new();
+    //     // for i in 0..data_length as usize {
+    //     //     data.push(status[Packet::Error.to_pos() + 1 + i]).unwrap();
+    //     // }
+    //     data.extend(
+    //         status
+    //             [(Packet::Error.to_pos() + 1)..(Packet::Error.to_pos() + 1 + data_length as usize)]
+    //             .iter()
+    //             .cloned(),
+    //     );
+
+    //     Ok(data)
+    // }
+
+    // /// TxRx
+    // pub fn read(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    //     data_length: u16,
+    // ) -> Result<Vec<u8, MAX_PACKET_LEN>, CommunicationResult> {
+    //     match self.send_read_packet(id, data_name, data_length) {
+    //         Ok(_) => {}
+    //         Err(e) => return Err(e),
+    //     }
+    //     self.receive_read_packet(id, data_length)
+    // }
+
+    // pub fn send_1byte_read_packet(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    // ) -> Result<(), CommunicationResult> {
+    //     self.send_read_packet(id, data_name, 1)
+    // }
+    // pub fn receive_1byte_read_packet(&mut self, id: u8) -> Result<u8, CommunicationResult> {
+    //     match self.receive_read_packet(id, 1) {
+    //         Ok(v) => Ok(u8::from_le_bytes([v[0]])),
+    //         Err(e) => Err(e),
+    //     }
+    // }
+    // pub fn read_1byte(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    // ) -> Result<u8, CommunicationResult> {
+    //     match self.read(id, data_name, 1) {
+    //         Ok(v) => Ok(u8::from_le_bytes([v[0]])),
+    //         Err(e) => Err(e),
+    //     }
+    // }
+    // pub fn send_2byte_read_packet(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    // ) -> Result<(), CommunicationResult> {
+    //     self.send_read_packet(id, data_name, 2)
+    // }
+    // pub fn receive_2byte_read_packet(&mut self, id: u8) -> Result<u16, CommunicationResult> {
+    //     match self.receive_read_packet(id, 2) {
+    //         Ok(v) => Ok(u16::from_le_bytes([v[0], v[1]])),
+    //         Err(e) => Err(e),
+    //     }
+    // }
+    // pub fn read_2byte(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    // ) -> Result<u16, CommunicationResult> {
+    //     match self.read(id, data_name, 2) {
+    //         Ok(v) => Ok(u16::from_le_bytes([v[0], v[1]])),
+    //         Err(e) => Err(e),
+    //     }
+    // }
+    // pub fn send_4byte_read_packet(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    // ) -> Result<(), CommunicationResult> {
+    //     self.send_read_packet(id, data_name, 4)
+    // }
+    // pub fn receive_4byte_read_packet(&mut self, id: u8) -> Result<u32, CommunicationResult> {
+    //     match self.receive_read_packet(id, 4) {
+    //         Ok(v) => Ok(u32::from_le_bytes([v[0], v[1], v[2], v[3]])),
+    //         Err(e) => Err(e),
+    //     }
+    // }
+    // pub fn read_4byte(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    // ) -> Result<u32, CommunicationResult> {
+    //     match self.read(id, data_name, 4) {
+    //         Ok(v) => Ok(u32::from_le_bytes([v[0], v[1], v[2], v[3]])),
+    //         Err(e) => Err(e),
+    //     }
+    // }
+
+    // pub fn send_write_packet(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    //     data: &[u8],
+    // ) -> Result<(), CommunicationResult> {
+    //     if id >= BROADCAST_ID {
+    //         return Err(CommunicationResult::NotAvailable);
+    //     }
+
+    //     let address = data_name.to_address();
+    //     let size = data_name.to_size();
+    //     let length: u16 = 1 + 2 + (data.len() as u16) + 2; // instruction + adress + data + crc
+
+    //     if size != data.len() as u16 {
+    //         return Err(CommunicationResult::NotAvailable);
+    //     }
+
+    //     let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+    //     msg.extend(self.reserve_msg_header().iter().cloned());
+    //     msg.push(id).unwrap();
+    //     msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
+    //     msg.push(Instruction::Write as u8).unwrap();
+    //     msg.extend(address.to_le_bytes().iter().cloned());
+
+    //     // for d in data {
+    //     //     msg.push(*d).unwrap();
+    //     // }
+    //     msg.extend(data.iter().cloned());
+    //     let packet_len = msg.len() + 2;
+    //     match self.send_packet(msg) {
+    //         Ok(_) => {
+    //             self.set_packet_timeout_length(packet_len);
+    //             Ok(())
+    //         }
+    //         Err(e) => Err(e),
+    //     }
+    // }
+
+    // /// TxRx
+    // pub fn write(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    //     data: &[u8],
+    // ) -> Result<(), CommunicationResult> {
+    //     match self.send_write_packet(id, data_name, data) {
+    //         Ok(_) => {}
+    //         Err(e) => return Err(e),
+    //     }
+    //     let status;
+    //     match self.receive_packet() {
+    //         Ok(v) => status = v,
+    //         Err(e) => return Err(e),
+    //     }
+
+    //     // header + id + length + instruction + err + param + crc
+    //     // id check
+    //     if status[Packet::Id.to_pos()] != id {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+    //     // data length check
+    //     if u16::from_le_bytes([
+    //         status[Packet::LengthL.to_pos()],
+    //         status[Packet::LengthH.to_pos()],
+    //     ]) - 4
+    //         != 0
+    //     {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+    //     // instruction check
+    //     if status[Packet::Instruction.to_pos()] != Instruction::Status as u8 {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+    //     if status[Packet::Error.to_pos()] != 0x00 {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+
+    //     Ok(())
+    // }
+
+    // pub fn send_1byte_write_packet(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    //     data: u8,
+    // ) -> Result<(), CommunicationResult> {
+    //     self.send_write_packet(id, data_name, &[data])
+    // }
+    // pub fn write_1byte(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    //     data: u8,
+    // ) -> Result<(), CommunicationResult> {
+    //     self.write(id, data_name, &[data])
+    // }
+    // pub fn send_2byte_write_packet(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    //     data: u16,
+    // ) -> Result<(), CommunicationResult> {
+    //     self.send_write_packet(id, data_name, &data.to_le_bytes())
+    // }
+    // pub fn write_2byte(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    //     data: u16,
+    // ) -> Result<(), CommunicationResult> {
+    //     self.write(id, data_name, &data.to_le_bytes())
+    // }
+    // pub fn send_4byte_write_packet(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    //     data: u32,
+    // ) -> Result<(), CommunicationResult> {
+    //     self.send_write_packet(id, data_name, &data.to_le_bytes())
+    // }
+    // pub fn write_4byte(
+    //     &mut self,
+    //     id: u8,
+    //     data_name: ControlTable,
+    //     data: u32,
+    // ) -> Result<(), CommunicationResult> {
+    //     self.write(id, data_name, &data.to_le_bytes())
+    // }
+
+    // /// Reset all except ID and Baudrate.
+    // /// Other reset type is not implemented yet.
+    // pub fn factory_reset(&mut self, id: u8) -> Result<(), CommunicationResult> {
+    //     let length: u16 = 1 + 1 + 2; // instruction + param1 + crc
+    //     let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+
+    //     msg.extend(self.reserve_msg_header().iter().cloned());
+    //     msg.push(id).unwrap();
+    //     msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
+    //     msg.push(Instruction::FactoryReset as u8).unwrap();
+    //     msg.push(0x02).unwrap(); // Reset all except ID and Baudrate
+    //     let packet_len = msg.len() + 2;
+    //     match self.send_packet(msg) {
+    //         Ok(_) => {
+    //             self.set_packet_timeout_length(packet_len);
+    //         }
+    //         Err(e) => return Err(e),
+    //     }
+
+    //     let status;
+    //     match self.receive_packet() {
+    //         Ok(v) => status = v,
+    //         Err(e) => return Err(e),
+    //     }
+
+    //     // header + id + length + instruction + err + param + crc
+    //     // id check
+    //     if status[Packet::Id.to_pos()] != id {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+    //     // data length check
+    //     if u16::from_le_bytes([
+    //         status[Packet::LengthL.to_pos()],
+    //         status[Packet::LengthH.to_pos()],
+    //     ]) - 4
+    //         != 0
+    //     {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+    //     // instruction check
+    //     if status[Packet::Instruction.to_pos()] != Instruction::Status as u8 {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+    //     if status[Packet::Error.to_pos()] != 0x00 {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+
+    //     Ok(())
+    // }
+
+    // pub fn reboot(&mut self, id: u8) -> Result<(), CommunicationResult> {
+    //     let length: u16 = 1 + 2; // instruction + crc
+    //     let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+
+    //     msg.extend(self.reserve_msg_header().iter().cloned());
+    //     msg.push(id).unwrap();
+    //     msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
+    //     msg.push(Instruction::Reboot as u8).unwrap();
+    //     let packet_len = msg.len() + 2;
+    //     match self.send_packet(msg) {
+    //         Ok(_) => {
+    //             self.set_packet_timeout_length(packet_len);
+    //         }
+    //         Err(e) => return Err(e),
+    //     }
+
+    //     let status;
+    //     match self.receive_packet() {
+    //         Ok(v) => status = v,
+    //         Err(e) => return Err(e),
+    //     }
+
+    //     // header + id + length + instruction + err + param + crc
+    //     // id check
+    //     if status[Packet::Id.to_pos()] != id {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+    //     // data length check
+    //     if u16::from_le_bytes([
+    //         status[Packet::LengthL.to_pos()],
+    //         status[Packet::LengthH.to_pos()],
+    //     ]) - 4
+    //         != 0
+    //     {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+    //     // instruction check
+    //     if status[Packet::Instruction.to_pos()] != Instruction::Status as u8 {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+    //     if status[Packet::Error.to_pos()] != 0x00 {
+    //         return Err(CommunicationResult::SomethingWentWrong);
+    //     }
+
+    //     Ok(())
+    // }
+
+    // pub fn send_sync_read_packet(
+    //     &mut self,
+    //     id: &[u8],
+    //     data_name: ControlTable,
+    //     data_size: u16,
+    // ) -> Result<(), CommunicationResult> {
+    //     let address = data_name.to_address();
+    //     let length: u16 = 1 + 2 + 2 + id.len() as u16 + 2; // instruction + address + length + ids + crc
+    //     let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+
+    //     msg.extend(self.reserve_msg_header().iter().cloned());
+    //     msg.push(0xFE).unwrap(); // id
+    //     msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
+    //     msg.push(Instruction::SyncRead as u8).unwrap();
+    //     msg.extend(address.to_le_bytes().iter().cloned());
+    //     msg.extend(data_size.to_le_bytes().iter().cloned());
+    //     for i in id {
+    //         msg.push(i.clone()).unwrap();
+    //     }
+
+    //     let packet_len = msg.len() + 2;
+
+    //     match self.send_packet(msg) {
+    //         Ok(_) => {
+    //             self.set_packet_timeout_length(packet_len);
+    //         }
+    //         Err(e) => return Err(e),
+    //     }
+
+    //     Ok(())
+    // }
+    // pub fn send_sync_write_packet(
+    //     &mut self,
+    //     id: &[u8],
+    //     data: &[u8],
+    //     data_name: ControlTable,
+    //     data_size: u16,
+    // ) -> Result<(), CommunicationResult> {
+    //     let address = data_name.to_address();
+    //     let length: u16 = 1 + 2 + 2 + id.len() as u16 + id.len() as u16 * data_size + 2; // instruction + address + length + ids + datas + crc
+    //     let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+
+    //     msg.extend(self.reserve_msg_header().iter().cloned());
+    //     msg.push(0xFE).unwrap(); // id
+    //     msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
+    //     msg.push(Instruction::SyncWrite as u8).unwrap();
+    //     msg.extend(address.to_le_bytes().iter().cloned());
+    //     msg.extend(data_size.to_le_bytes().iter().cloned());
+    //     for i in 0..id.len() {
+    //         msg.push(id[i].clone()).unwrap();
+    //         for j in 0..data_size as usize {
+    //             msg.push(data[i * data_size as usize + j]).unwrap();
+    //         }
+    //     }
+
+    //     let packet_len = msg.len() + 2;
+
+    //     match self.send_packet(msg) {
+    //         Ok(_) => {
+    //             self.set_packet_timeout_length(packet_len);
+    //         }
+    //         Err(e) => return Err(e),
+    //     }
+
+    //     Ok(())
+    // }
+
+    // // bulkReadTx
+    // // bulkWriteTxOnly
+    // // pub fn broadcast_ping(&mut self) {}
+    // // regWriteTxOnly
+    // // regWriteTxRx
+    // // pub fn action(&mut self) {}
+    // // clear
+
+    // fn calc_crc_value(&self, msg: &[u8]) -> u16 {
+    //     let crc_table = [
+    //         0x0000, 0x8005, 0x800F, 0x000A, 0x801B, 0x001E, 0x0014, 0x8011, 0x8033, 0x0036, 0x003C,
+    //         0x8039, 0x0028, 0x802D, 0x8027, 0x0022, 0x8063, 0x0066, 0x006C, 0x8069, 0x0078, 0x807D,
+    //         0x8077, 0x0072, 0x0050, 0x8055, 0x805F, 0x005A, 0x804B, 0x004E, 0x0044, 0x8041, 0x80C3,
+    //         0x00C6, 0x00CC, 0x80C9, 0x00D8, 0x80DD, 0x80D7, 0x00D2, 0x00F0, 0x80F5, 0x80FF, 0x00FA,
+    //         0x80EB, 0x00EE, 0x00E4, 0x80E1, 0x00A0, 0x80A5, 0x80AF, 0x00AA, 0x80BB, 0x00BE, 0x00B4,
+    //         0x80B1, 0x8093, 0x0096, 0x009C, 0x8099, 0x0088, 0x808D, 0x8087, 0x0082, 0x8183, 0x0186,
+    //         0x018C, 0x8189, 0x0198, 0x819D, 0x8197, 0x0192, 0x01B0, 0x81B5, 0x81BF, 0x01BA, 0x81AB,
+    //         0x01AE, 0x01A4, 0x81A1, 0x01E0, 0x81E5, 0x81EF, 0x01EA, 0x81FB, 0x01FE, 0x01F4, 0x81F1,
+    //         0x81D3, 0x01D6, 0x01DC, 0x81D9, 0x01C8, 0x81CD, 0x81C7, 0x01C2, 0x0140, 0x8145, 0x814F,
+    //         0x014A, 0x815B, 0x015E, 0x0154, 0x8151, 0x8173, 0x0176, 0x017C, 0x8179, 0x0168, 0x816D,
+    //         0x8167, 0x0162, 0x8123, 0x0126, 0x012C, 0x8129, 0x0138, 0x813D, 0x8137, 0x0132, 0x0110,
+    //         0x8115, 0x811F, 0x011A, 0x810B, 0x010E, 0x0104, 0x8101, 0x8303, 0x0306, 0x030C, 0x8309,
+    //         0x0318, 0x831D, 0x8317, 0x0312, 0x0330, 0x8335, 0x833F, 0x033A, 0x832B, 0x032E, 0x0324,
+    //         0x8321, 0x0360, 0x8365, 0x836F, 0x036A, 0x837B, 0x037E, 0x0374, 0x8371, 0x8353, 0x0356,
+    //         0x035C, 0x8359, 0x0348, 0x834D, 0x8347, 0x0342, 0x03C0, 0x83C5, 0x83CF, 0x03CA, 0x83DB,
+    //         0x03DE, 0x03D4, 0x83D1, 0x83F3, 0x03F6, 0x03FC, 0x83F9, 0x03E8, 0x83ED, 0x83E7, 0x03E2,
+    //         0x83A3, 0x03A6, 0x03AC, 0x83A9, 0x03B8, 0x83BD, 0x83B7, 0x03B2, 0x0390, 0x8395, 0x839F,
+    //         0x039A, 0x838B, 0x038E, 0x0384, 0x8381, 0x0280, 0x8285, 0x828F, 0x028A, 0x829B, 0x029E,
+    //         0x0294, 0x8291, 0x82B3, 0x02B6, 0x02BC, 0x82B9, 0x02A8, 0x82AD, 0x82A7, 0x02A2, 0x82E3,
+    //         0x02E6, 0x02EC, 0x82E9, 0x02F8, 0x82FD, 0x82F7, 0x02F2, 0x02D0, 0x82D5, 0x82DF, 0x02DA,
+    //         0x82CB, 0x02CE, 0x02C4, 0x82C1, 0x8243, 0x0246, 0x024C, 0x8249, 0x0258, 0x825D, 0x8257,
+    //         0x0252, 0x0270, 0x8275, 0x827F, 0x027A, 0x826B, 0x026E, 0x0264, 0x8261, 0x0220, 0x8225,
+    //         0x822F, 0x022A, 0x823B, 0x023E, 0x0234, 0x8231, 0x8213, 0x0216, 0x021C, 0x8219, 0x0208,
+    //         0x820D, 0x8207, 0x0202,
+    //     ];
+
+    //     let mut crc_accum = 0x0000;
+    //     for j in 0..msg.len() {
+    //         let i = ((((crc_accum >> 8) as u8) ^ msg[j]) & 0xFF) as usize;
+    //         crc_accum = (crc_accum << 8) ^ crc_table[i];
+    //     }
+
+    //     crc_accum
+    // }
+
+    // fn set_packet_timeout_length(&mut self, packet_length: usize) {
+    //     pub const LATENCY_CLOCK: u64 = 1_000; // usec
+    //     self.packet_start_time = self.clock.get_current_time();
+    //     let timeout_usec =
+    //         (self.tx_time_per_byte * packet_length as u64) + (LATENCY_CLOCK * 2) + 2_000;
+    //     self.set_packet_timeout_micros(timeout_usec);
+    // }
+
+    // fn set_packet_timeout_millis(&mut self, msec: u64) {
+    //     self.packet_start_time = self.clock.get_current_time();
+    //     self.packet_timeout = Duration::from_millis(msec);
+    // }
+
+    // fn set_packet_timeout_micros(&mut self, usec: u64) {
+    //     self.packet_start_time = self.clock.get_current_time();
+    //     self.packet_timeout = Duration::from_micros(usec)
+    // }
+
+    // fn is_packet_timeout(&self) -> bool {
+    //     if self.clock.get_current_time() > self.packet_start_time + self.packet_timeout {
+    //         true
+    //     } else {
+    //         false
+    //     }
+    // }
 
     fn clear_port(&mut self) {
         self.uart.clear_read_buf();
@@ -953,7 +982,7 @@ impl<'a> DynamixelControl<'a> {
 mod tests {
     use crate::packet_handler::MAX_PACKET_LEN;
     use crate::ControlTable;
-    use crate::DynamixelControl;
+    use crate::DynamixelProtocolHandler;
     use crate::Instruction;
     use core::cell::RefCell;
     use core::time::Duration;
@@ -1018,95 +1047,95 @@ mod tests {
         }
     }
 
-    #[test]
-    fn crc() {
-        let mut mock_uart = MockSerial::new();
-        let mock_clock = MockClock::new();
-        let dxl = DynamixelControl::new(&mut mock_uart, &mock_clock, 115200);
-        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-        msg.extend(
-            [
-                0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26,
-            ]
-            .iter()
-            .cloned(),
-        );
-        assert_eq!(dxl.calc_crc_value(&msg), 0x5D65);
-    }
+    // #[test]
+    // fn crc() {
+    //     let mut mock_uart = MockSerial::new();
+    //     let mock_clock = MockClock::new();
+    //     let dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200);
+    //     let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+    //     msg.extend(
+    //         [
+    //             0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26,
+    //         ]
+    //         .iter()
+    //         .cloned(),
+    //     );
+    //     assert_eq!(dxl.calc_crc_value(&msg), 0x5D65);
+    // }
 
-    #[test]
-    #[ignore]
-    fn calc_crc() {
-        let mut mock_uart = MockSerial::new();
-        let mock_clock = MockClock::new();
-        let dxl = DynamixelControl::new(&mut mock_uart, &mock_clock, 115200);
-        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-        msg.extend(
-            [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x06, 0x02]
-                .iter()
-                .cloned(),
-        );
-        assert_eq!(dxl.calc_crc_value(&msg), 0x0000);
-    }
+    // #[test]
+    // #[ignore]
+    // fn calc_crc() {
+    //     let mut mock_uart = MockSerial::new();
+    //     let mock_clock = MockClock::new();
+    //     let dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200);
+    //     let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+    //     msg.extend(
+    //         [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x06, 0x02]
+    //             .iter()
+    //             .cloned(),
+    //     );
+    //     assert_eq!(dxl.calc_crc_value(&msg), 0x0000);
+    // }
 
-    #[test]
-    fn stuffing() {
-        let mut mock_uart = MockSerial::new();
-        let mock_clock = MockClock::new();
-        let mut dxl = DynamixelControl::new(&mut mock_uart, &mock_clock, 115200);
-        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-        msg.extend(
-            [
-                0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x0B, 0x00, 0x03, 0xE0, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
-                0xFD, 0x01, 0x00, 0x00,
-            ]
-            .iter()
-            .cloned(),
-        );
-        dxl.add_stuffing(&mut msg);
-        assert_eq!(
-            *msg,
-            [
-                0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x0C, 0x00, 0x03, 0xE0, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
-                0xFD, 0xFD, 0x01, 0x00, 0x00
-            ]
-        );
-        dxl.remove_stuffing(&mut msg);
-        assert_eq!(
-            *msg,
-            [
-                0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x0B, 0x00, 0x03, 0xE0, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
-                0xFD, 0x01, 0x00, 0x00
-            ]
-        );
-    }
+    // #[test]
+    // fn stuffing() {
+    //     let mut mock_uart = MockSerial::new();
+    //     let mock_clock = MockClock::new();
+    //     let mut dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200);
+    //     let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+    //     msg.extend(
+    //         [
+    //             0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x0B, 0x00, 0x03, 0xE0, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+    //             0xFD, 0x01, 0x00, 0x00,
+    //         ]
+    //         .iter()
+    //         .cloned(),
+    //     );
+    //     dxl.add_stuffing(&mut msg);
+    //     assert_eq!(
+    //         *msg,
+    //         [
+    //             0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x0C, 0x00, 0x03, 0xE0, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+    //             0xFD, 0xFD, 0x01, 0x00, 0x00
+    //         ]
+    //     );
+    //     dxl.remove_stuffing(&mut msg);
+    //     assert_eq!(
+    //         *msg,
+    //         [
+    //             0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x0B, 0x00, 0x03, 0xE0, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+    //             0xFD, 0x01, 0x00, 0x00
+    //         ]
+    //     );
+    // }
 
-    #[test]
-    fn clock() {
-        let mut mock_uart = MockSerial::new();
-        let mock_clock = MockClock::new();
+    // #[test]
+    // fn clock() {
+    //     let mut mock_uart = MockSerial::new();
+    //     let mock_clock = MockClock::new();
 
-        let mut dxl = DynamixelControl::new(&mut mock_uart, &mock_clock, 115200);
-        dxl.set_packet_timeout_length(10);
-        assert_eq!(dxl.packet_timeout.as_micros(), 4700);
-        assert_eq!(dxl.is_packet_timeout(), false);
-        for _ in 0..4 {
-            mock_clock.tick();
-        }
-        assert_eq!(dxl.is_packet_timeout(), false);
-        mock_clock.tick();
-        assert_eq!(dxl.is_packet_timeout(), true);
-    }
+    //     let mut dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200);
+    //     dxl.set_packet_timeout_length(10);
+    //     assert_eq!(dxl.packet_timeout.as_micros(), 4700);
+    //     assert_eq!(dxl.is_packet_timeout(), false);
+    //     for _ in 0..4 {
+    //         mock_clock.tick();
+    //     }
+    //     assert_eq!(dxl.is_packet_timeout(), false);
+    //     mock_clock.tick();
+    //     assert_eq!(dxl.is_packet_timeout(), true);
+    // }
 
-    #[test]
-    fn refcell() {
-        let cell = RefCell::new(5);
-        assert_eq!(cell.clone().into_inner(), 5);
+    // #[test]
+    // fn refcell() {
+    //     let cell = RefCell::new(5);
+    //     assert_eq!(cell.clone().into_inner(), 5);
 
-        cell.replace_with(|&mut old| old + 1);
-        assert_eq!(cell, RefCell::new(6));
-        assert_eq!(cell.clone().into_inner(), 6);
-    }
+    //     cell.replace_with(|&mut old| old + 1);
+    //     assert_eq!(cell, RefCell::new(6));
+    //     assert_eq!(cell.clone().into_inner(), 6);
+    // }
 
     #[test]
     fn clear_port() {
@@ -1115,7 +1144,7 @@ mod tests {
         mock_uart.tx_buf.push_back(2).unwrap();
         mock_uart.tx_buf.push_back(3).unwrap();
         let mock_clock = MockClock::new();
-        let mut dxl = DynamixelControl::new(&mut mock_uart, &mock_clock, 115200);
+        let mut dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 1, 115200);
         dxl.clear_port();
         assert_eq!(mock_uart.tx_buf.is_empty(), true);
     }

@@ -1,5 +1,5 @@
 [package]
-name = "dynamixel-rs"
+name = "dynamixel-f-rs"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,7 +8,3 @@ edition = "2021"
 [dependencies]
 heapless = "0.7.10"
 spin = "0.9.3"
-
-[features]
-default = ["xc330"]
-xc330 = []

@@ -1,5 +1,5 @@
-# dynamixel-rs
-[![Rust](https://github.com/chama1176/dynamixel-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/chama1176/dynamixel-rs/actions/workflows/rust.yml)
+# dynamixel-f-rs
+[![Rust](https://github.com/chama1176/dynamixel-f-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/chama1176/dynamixel-f-rs/actions/workflows/rust.yml)
 
 ## Class Diagram
 ```mermaid
