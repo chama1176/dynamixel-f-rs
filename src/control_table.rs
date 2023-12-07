@@ -361,8 +361,10 @@ impl ControlTableData {
             value: Cell::new([0; 8]),
         }
     }
-    pub fn read(&self) -> Ux {
-        self.value.get()
+    pub fn read(&self) -> R<Ux> {
+        R {
+            bits: self.value.get(),
+        }
     }
     pub fn modify(&self, value: u8) {
         // self.value.set();
@@ -374,34 +376,6 @@ impl ControlTableData {
     {
         self.value.set(f(&mut W { bits: [0; 8] }).bits);
     }
-}
-
-impl ControlTableData {
-    pub fn id(&mut self) -> Id<<IDSpec as DataSpec>::Ux> {
-        Id {
-            value: self.value.get()[IDSpec::to_address() as usize],
-        }
-    }
-}
-
-pub struct Id<Ux> {
-    value: Ux,
-}
-impl<Ux> Id<Ux>
-where
-    Ux: Copy,
-{
-    pub fn new(value: Ux) -> Self {
-        Self { value }
-    }
-    pub fn read(&self) -> Ux {
-        self.value
-        // self.value.get()[IDSpec::to_address() as usize]
-    }
-    // pub fn write(&self, value: Ux) -> Ux {
-    //     self.value.set(value)
-    //     // self.value.get()[IDSpec::to_address() as usize]
-    // }
 }
 
 /// Register reader.
@@ -434,7 +408,7 @@ pub struct W<T> {
 impl<T> W<T> {
     /// Writes raw bits to the register.
     #[inline(always)]
-    pub unsafe fn bits(&mut self, bits: T) -> &mut Self {
+    pub fn bits(&mut self, bits: T) -> &mut Self {
         self.bits = bits;
         self
     }
@@ -442,7 +416,7 @@ impl<T> W<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::control_table::{ControlTable, ControlTableData};
+    use crate::control_table::{ControlTable, ControlTableData, W};
 
     #[test]
     fn to_address() {
@@ -451,13 +425,15 @@ mod tests {
         assert_eq!(ControlTable::TorqueEnable.to_address(), 64)
     }
     #[test]
-    fn address_check() {
-        let mut ctd = ControlTableData::new();
-        assert_eq!(ctd.id().read(), 0)
-    }
-    #[test]
     fn read() {
         let ctd = ControlTableData::new();
-        assert_eq!(ctd.read()[0], 0)
+        assert_eq!(ctd.read().bits(), [0; 8])
+    }
+
+    #[test]
+    fn write() {
+        let ctd = ControlTableData::new();
+        ctd.write(|w| w.bits([1, 2, 3, 4, 5, 6, 7, 8]));
+        assert_eq!(ctd.read().bits(), [1,2,3,4,5,6,7,8])
     }
 }
