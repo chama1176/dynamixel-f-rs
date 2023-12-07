@@ -1,9 +1,3 @@
 use crate::ControlTable;
 
-
-
-pub struct ControlTableData {
-
-
-}
-
+pub struct ControlTableData {}

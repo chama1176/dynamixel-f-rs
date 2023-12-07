@@ -1,6 +1,5 @@
-
-use core::cell::Cell;
 use crate::data_spec::{self, DataSpec};
+use core::cell::Cell;
 
 #[allow(dead_code)]
 pub enum ControlTable {
@@ -301,11 +300,10 @@ impl ControlTable {
     }
 }
 
-
 pub struct ModelNumberSpec;
 impl data_spec::DataSpec for ModelNumberSpec {
     type Ux = u16;
-    fn reset_value() -> Self::Ux{
+    fn reset_value() -> Self::Ux {
         0
     }
     fn to_address() -> u16 {
@@ -316,7 +314,7 @@ impl data_spec::DataSpec for ModelNumberSpec {
 pub struct ModelInformationSpec;
 impl data_spec::DataSpec for ModelInformationSpec {
     type Ux = u32;
-    fn reset_value() -> Self::Ux{
+    fn reset_value() -> Self::Ux {
         0
     }
     fn to_address() -> u16 {
@@ -327,7 +325,7 @@ impl data_spec::DataSpec for ModelInformationSpec {
 pub struct FirmwareVersionSpec;
 impl data_spec::DataSpec for FirmwareVersionSpec {
     type Ux = u8;
-    fn reset_value() -> Self::Ux{
+    fn reset_value() -> Self::Ux {
         0
     }
     fn to_address() -> u16 {
@@ -338,7 +336,7 @@ impl data_spec::DataSpec for FirmwareVersionSpec {
 pub struct IDSpec;
 impl data_spec::DataSpec for IDSpec {
     type Ux = u8;
-    fn reset_value() -> Self::Ux{
+    fn reset_value() -> Self::Ux {
         0
     }
     fn to_address() -> u16 {
@@ -346,53 +344,106 @@ impl data_spec::DataSpec for IDSpec {
     }
 }
 
-
-#[repr(packed)]
+type Ux = [u8; 8];
 pub struct ControlTableData {
-
-    value: Cell<[u8; 8]>,
+    value: Cell<Ux>,
+    // value: [Cell<u8>; 8],だと要素ごとに.getしないといけないのが大変そうなので上で進めてみる
 
     // pub model_number: data_spec::Data<ModelNumberSpec>,
     // pub model_information: data_spec::Data<ModelInformationSpec>,
     // pub firmware_version: data_spec::Data<FirmwareVersionSpec>,
     // pub id: data_spec::Data<IDSpec>,
-
 }
+
 impl ControlTableData {
-    pub fn new() -> Self{
-        Self{value: Cell::new([0; 8])}
+    pub fn new() -> Self {
+        Self {
+            value: Cell::new([0; 8]),
+        }
+    }
+    pub fn read(&self) -> Ux {
+        self.value.get()
+    }
+    pub fn modify(&self, value: u8) {
+        // self.value.set();
+    }
+
+    pub fn write<F>(&self, f: F)
+    where
+        F: FnOnce(&mut W<Ux>) -> &mut W<Ux>,
+    {
+        self.value.set(f(&mut W { bits: [0; 8] }).bits);
     }
 }
 
 impl ControlTableData {
-
-    pub fn id(&mut self) -> Id<<IDSpec as DataSpec>::Ux>{
-        Id{
-            value:self.value.get()[IDSpec::to_address() as usize]
+    pub fn id(&mut self) -> Id<<IDSpec as DataSpec>::Ux> {
+        Id {
+            value: self.value.get()[IDSpec::to_address() as usize],
         }
     }
 }
 
 pub struct Id<Ux> {
-    value : Ux
+    value: Ux,
 }
-impl<Ux> Id<Ux>     
-where Ux: Copy,
+impl<Ux> Id<Ux>
+where
+    Ux: Copy,
 {
-    pub fn new(value :Ux) -> Self{
-        Self{value}
+    pub fn new(value: Ux) -> Self {
+        Self { value }
     }
     pub fn read(&self) -> Ux {
         self.value
         // self.value.get()[IDSpec::to_address() as usize]
     }
+    // pub fn write(&self, value: Ux) -> Ux {
+    //     self.value.set(value)
+    //     // self.value.get()[IDSpec::to_address() as usize]
+    // }
+}
 
+/// Register reader.
+///
+/// Result of the `read` methods of registers. Also used as a closure argument in the `modify`
+/// method.
+pub struct R<T> {
+    bits: T,
+}
+
+impl<T> R<T>
+where
+    T: Copy,
+{
+    /// Reads raw bits from register.
+    #[inline(always)]
+    pub fn bits(&self) -> T {
+        self.bits
+    }
+}
+
+/// Register writer.
+///
+/// Used as an argument to the closures in the `write` and `modify` methods of the register.
+pub struct W<T> {
+    ///Writable bits
+    bits: T,
+}
+
+impl<T> W<T> {
+    /// Writes raw bits to the register.
+    #[inline(always)]
+    pub unsafe fn bits(&mut self, bits: T) -> &mut Self {
+        self.bits = bits;
+        self
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::control_table::{ControlTable, ControlTableData};
-    
+
     #[test]
     fn to_address() {
         let name = ControlTable::ModelNumber;
@@ -403,5 +454,10 @@ mod tests {
     fn address_check() {
         let mut ctd = ControlTableData::new();
         assert_eq!(ctd.id().read(), 0)
+    }
+    #[test]
+    fn read() {
+        let ctd = ControlTableData::new();
+        assert_eq!(ctd.read()[0], 0)
     }
 }

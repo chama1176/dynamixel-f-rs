@@ -6,16 +6,16 @@
 pub mod control_data;
 pub mod control_table;
 pub mod control_table_data;
+mod data_spec;
 mod instruction;
 pub mod packet_handler;
 pub mod utils;
-mod data_spec;
 
-use instruction::Instruction;
-pub use packet_handler::DynamixelProtocolHandler;
 pub use control_data::*;
 pub use control_table::ControlTable;
+use instruction::Instruction;
 pub use packet_handler::CommunicationResult;
+pub use packet_handler::DynamixelProtocolHandler;
 use packet_handler::MAX_PACKET_LEN;
 pub use utils::DegRad;
 
@@ -33,7 +33,6 @@ pub trait Interface {
 pub trait Clock {
     fn get_current_time(&self) -> Duration;
 }
-
 
 // 送られてくるパケットに自分宛てのものがあるかチェックする。
 // 自分宛てのものがあったら最後のパケットからreturn delay time後に返信を返す

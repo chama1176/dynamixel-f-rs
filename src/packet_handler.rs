@@ -1,7 +1,7 @@
+use crate::Clock;
 use crate::ControlTable;
 use crate::Instruction;
 use crate::Interface;
-use crate::Clock;
 use core::fmt;
 use core::result::Result;
 use core::time::Duration;
@@ -120,14 +120,13 @@ pub struct DynamixelProtocolHandler<'a> {
     // tx_time_per_byte: u64,
 }
 
-
 #[allow(dead_code)]
 impl<'a> DynamixelProtocolHandler<'a> {
     pub fn new(uart: &'a mut dyn Interface, clock: &'a dyn Clock, id: u8, baudrate: u32) -> Self {
         Self {
             uart,
             clock,
-            id, 
+            id,
             // is_enabled: false,
             is_using: false,
             // packet_start_time: Duration::new(0, 0),
