@@ -300,59 +300,10 @@ impl ControlTable {
     }
 }
 
-pub struct ModelNumberSpec;
-impl data_spec::DataSpec for ModelNumberSpec {
-    type Ux = u16;
-    fn reset_value() -> Self::Ux {
-        0
-    }
-    fn to_address() -> u16 {
-        0
-    }
-}
-
-pub struct ModelInformationSpec;
-impl data_spec::DataSpec for ModelInformationSpec {
-    type Ux = u32;
-    fn reset_value() -> Self::Ux {
-        0
-    }
-    fn to_address() -> u16 {
-        0
-    }
-}
-
-pub struct FirmwareVersionSpec;
-impl data_spec::DataSpec for FirmwareVersionSpec {
-    type Ux = u8;
-    fn reset_value() -> Self::Ux {
-        0
-    }
-    fn to_address() -> u16 {
-        0
-    }
-}
-
-pub struct IDSpec;
-impl data_spec::DataSpec for IDSpec {
-    type Ux = u8;
-    fn reset_value() -> Self::Ux {
-        0
-    }
-    fn to_address() -> u16 {
-        7
-    }
-}
-
 type Ux = [u8; 8];
 pub struct ControlTableData {
     value: Cell<Ux>,
     // value: [Cell<u8>; 8],だと要素ごとに.getしないといけないのが大変そうなので上で進めてみる
-
-    // pub model_number: data_spec::Data<ModelNumberSpec>,
-    // pub model_information: data_spec::Data<ModelInformationSpec>,
-    // pub firmware_version: data_spec::Data<FirmwareVersionSpec>,
-    // pub id: data_spec::Data<IDSpec>,
 }
 
 impl ControlTableData {
@@ -361,18 +312,22 @@ impl ControlTableData {
             value: Cell::new([0; 8]),
         }
     }
-    pub fn read(&self) -> R<Ux> {
+    pub fn read(&self) -> R {
         R {
             bits: self.value.get(),
         }
     }
-    pub fn modify(&self, value: u8) {
-        // self.value.set();
+    pub fn modify<F>(&self, f: F)
+    where
+        for<'w> F: FnOnce(&R, &'w mut W) -> &'w mut W,
+    {
+        let bits = self.value.get();
+        self.value.set(f(&R { bits }, &mut W { bits }).bits);
     }
 
     pub fn write<F>(&self, f: F)
     where
-        F: FnOnce(&mut W<Ux>) -> &mut W<Ux>,
+        F: FnOnce(&mut W) -> &mut W,
     {
         self.value.set(f(&mut W { bits: [0; 8] }).bits);
     }
@@ -382,37 +337,81 @@ impl ControlTableData {
 ///
 /// Result of the `read` methods of registers. Also used as a closure argument in the `modify`
 /// method.
-pub struct R<T> {
-    bits: T,
+pub struct R {
+    bits: Ux,
 }
 
-impl<T> R<T>
-where
-    T: Copy,
-{
+impl R {
     /// Reads raw bits from register.
     #[inline(always)]
-    pub fn bits(&self) -> T {
+    pub fn bits(&self) -> Ux {
         self.bits
+    }
+    pub fn id(&self) -> u8 {
+        self.bits[ControlTable::ID.to_address() as usize]
     }
 }
 
 /// Register writer.
 ///
 /// Used as an argument to the closures in the `write` and `modify` methods of the register.
-pub struct W<T> {
+pub struct W {
     ///Writable bits
-    bits: T,
+    bits: Ux,
 }
 
-impl<T> W<T> {
+impl W {
     /// Writes raw bits to the register.
     #[inline(always)]
-    pub fn bits(&mut self, bits: T) -> &mut Self {
+    pub fn bits(&mut self, bits: Ux) -> &mut Self {
         self.bits = bits;
         self
     }
+    pub fn id(&mut self) -> IdW {
+        IdW {
+            w: self,
+        }
+    }
 }
+
+pub struct IdW<'a> {
+    w: &'a mut W,
+}
+impl<'a> IdW<'a> {
+    #[inline(always)]
+    pub fn bits(self, value: u8) -> &'a mut W {
+        self.w.bits[ControlTable::ID.to_address() as usize] = value;
+        self.w
+    }
+}
+
+pub struct ModelNumberW<'a> {
+    w: &'a mut W,
+}
+impl<'a> ModelNumberW<'a> {
+    #[inline(always)]
+    pub fn bits(self, value: u8) -> &'a mut W {
+        self.w.bits[ControlTable::ModelNumber.to_address() as usize] = value;
+        self.w
+    }
+}
+
+pub trait ControlTableW<'a, T> {
+    const CT: ControlTable;
+    fn bits(self, value: T) -> &'a mut W;
+}
+pub struct BaseW<'a> {
+    w: &'a mut W,
+}
+impl<'a> ControlTableW<'a, u8> for BaseW<'a> {
+    const CT: ControlTable = ControlTable::ModelNumber;
+    #[inline(always)]
+    fn bits(self, value: u8) -> &'a mut W {
+        self.w.bits[Self::CT.to_address() as usize] = value;
+        self.w
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -434,6 +433,19 @@ mod tests {
     fn write() {
         let ctd = ControlTableData::new();
         ctd.write(|w| w.bits([1, 2, 3, 4, 5, 6, 7, 8]));
-        assert_eq!(ctd.read().bits(), [1,2,3,4,5,6,7,8])
+        assert_eq!(ctd.read().bits(), [1, 2, 3, 4, 5, 6, 7, 8])
+    }
+
+    #[test]
+    fn modify() {
+        let ctd = ControlTableData::new();
+        ctd.write(|w| w.bits([1, 2, 3, 4, 5, 6, 7, 8]));
+        assert_eq!(ctd.read().bits(), [1, 2, 3, 4, 5, 6, 7, 8]);
+        ctd.modify(|_, w| w.bits([1, 2, 3, 4, 5, 6, 7, 8]));
+        assert_eq!(ctd.read().bits(), [1, 2, 3, 4, 5, 6, 7, 8]);
+        ctd.write(|w| w.id().bits(2));
+        assert_eq!(ctd.read().bits(), [0, 0, 0, 0, 0, 0, 0, 2]);
+
+        // TODO: テストをもう少し修正した方がよい
     }
 }
