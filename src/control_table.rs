@@ -1,5 +1,6 @@
 use crate::data_spec::{self, DataSpec};
 use core::cell::Cell;
+use core::marker;
 
 #[allow(dead_code)]
 pub enum ControlTable {
@@ -367,55 +368,55 @@ impl W {
         self.bits = bits;
         self
     }
-    pub fn id(&mut self) -> IdW {
-        IdW {
+    pub fn id(&mut self) -> BaseW<u8> {
+        BaseW::<u8> {
             w: self,
+            ct: ControlTable::ID,
+            _type: marker::PhantomData
         }
     }
-}
-
-pub struct IdW<'a> {
-    w: &'a mut W,
-}
-impl<'a> IdW<'a> {
-    #[inline(always)]
-    pub fn bits(self, value: u8) -> &'a mut W {
-        self.w.bits[ControlTable::ID.to_address() as usize] = value;
-        self.w
+    pub fn model_number(&mut self) -> BaseW<u16> {
+        BaseW::<u16> {
+            w: self,
+            ct: ControlTable::ModelNumber,
+            _type: marker::PhantomData
+        }
     }
+
+
 }
 
-pub struct ModelNumberW<'a> {
+pub struct BaseW<'a, T> {
     w: &'a mut W,
-}
-impl<'a> ModelNumberW<'a> {
-    #[inline(always)]
-    pub fn bits(self, value: u8) -> &'a mut W {
-        self.w.bits[ControlTable::ModelNumber.to_address() as usize] = value;
-        self.w
-    }
+    ct: ControlTable,
+    _type: marker::PhantomData<T>,
 }
 
-pub trait ControlTableW<'a, T> {
-    const CT: ControlTable;
-    fn bits(self, value: T) -> &'a mut W;
+pub trait BitsW<'a, P> {
+    fn bits(self, value: P) -> &'a mut W;
 }
-pub struct BaseW<'a> {
-    w: &'a mut W,
-}
-impl<'a> ControlTableW<'a, u8> for BaseW<'a> {
-    const CT: ControlTable = ControlTable::ModelNumber;
+
+impl<'a> BitsW<'a, u8> for BaseW<'a, u8> {
     #[inline(always)]
     fn bits(self, value: u8) -> &'a mut W {
-        self.w.bits[Self::CT.to_address() as usize] = value;
+        self.w.bits[self.ct.to_address() as usize] = value;
         self.w
     }
 }
 
+impl<'a> BitsW<'a, u16> for BaseW<'a, u16> {
+    #[inline(always)]
+    fn bits(self, value: u16) -> &'a mut W {
+        let v = value.to_le_bytes();
+        self.w.bits[self.ct.to_address() as usize] = v[0];
+        self.w.bits[self.ct.to_address() as usize + 1] = v[1];
+        self.w
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    use crate::control_table::{ControlTable, ControlTableData, W};
+    use crate::control_table::{ControlTable, ControlTableData, W, BitsW};
 
     #[test]
     fn to_address() {
@@ -445,6 +446,10 @@ mod tests {
         assert_eq!(ctd.read().bits(), [1, 2, 3, 4, 5, 6, 7, 8]);
         ctd.write(|w| w.id().bits(2));
         assert_eq!(ctd.read().bits(), [0, 0, 0, 0, 0, 0, 0, 2]);
+        ctd.write(|w| w.model_number().bits(0x4321));
+        assert_eq!(ctd.read().bits(), [0x21, 0x43, 0, 0, 0, 0, 0, 0]);
+        ctd.modify(|_, w| w.id().bits(2));
+        assert_eq!(ctd.read().bits(), [0x21, 0x43, 0, 0, 0, 0, 0, 2]);
 
         // TODO: テストをもう少し修正した方がよい
     }
