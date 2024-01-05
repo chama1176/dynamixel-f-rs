@@ -301,6 +301,64 @@ impl ControlTable {
     }
 }
 
+// trait CustomIntHelperTrait<const N: i8> {
+//     type Ty;
+// }
+// impl CustomIntHelperTrait<8> for () {
+//     type Ty = u8;
+// }
+// impl CustomIntHelperTrait<16> for () {
+//     type Ty = u16;
+// }
+// impl CustomIntHelperTrait<32> for () {
+//     type Ty = u32;
+// }
+// impl CustomIntHelperTrait<-16> for () {
+//     type Ty = i16;
+// }
+// impl CustomIntHelperTrait<-32> for () {
+//     type Ty = i32;
+// }
+// type ControlTableSize = <() as CustomIntHelperTrait<
+//     {
+//         let size = (HEIGHT * WIDTH).next_power_of_two();
+//         assert!(size <= 128, "HEIGHT * WIDTH is too large");
+//         if size >= 8 {
+//             size
+//         } else {
+//             8
+//         }
+//     }
+// >>::Ty;
+
+pub trait CustomIntHelperTrait<const N: usize> {
+    type Ty;
+}
+impl CustomIntHelperTrait<{ ControlTable::ModelNumber as usize }> for () {
+    type Ty = u16;
+}
+impl CustomIntHelperTrait<{ ControlTable::ModelInformation as usize }> for () {
+    type Ty = u32;
+}
+impl CustomIntHelperTrait<{ ControlTable::FirmwareVersion as usize }> for () {
+    type Ty = u8;
+}
+impl CustomIntHelperTrait<{ ControlTable::ID as usize }> for () {
+    type Ty = u8;
+}
+
+// macro_rules! to_type {
+//     ($input:expr) => {
+//         match ($input) {
+//             ControlTable::ModelNumber => u16,
+//             ControlTable::ModelInformation => u32,
+//             ControlTable::FirmwareVersion => u8,
+//             ControlTable::ID => u8,
+//             _ => u8,
+//         }
+//     }
+// }
+
 type Ux = [u8; 8];
 pub struct ControlTableData {
     value: Cell<Ux>,
@@ -342,14 +400,78 @@ pub struct R {
     bits: Ux,
 }
 
+trait ParseData<T> {
+    fn to_data(&self, ct: ControlTable) -> T;
+}
+
+impl ParseData<u8> for R {
+    fn to_data(&self, ct: ControlTable) -> u8 {
+        self.bits[ct.to_address() as usize]
+    }
+}
+impl ParseData<u16> for R {
+    fn to_data(&self, ct: ControlTable) -> u16 {
+        u16::from_le_bytes([
+            self.bits[ct.to_address() as usize],
+            self.bits[ct.to_address() as usize + 1],
+        ])
+    }
+}
+
+impl ParseData<i16> for R {
+    fn to_data(&self, ct: ControlTable) -> i16 {
+        i16::from_le_bytes([
+            self.bits[ct.to_address() as usize],
+            self.bits[ct.to_address() as usize + 1],
+        ])
+    }
+}
+
+impl ParseData<u32> for R {
+    fn to_data(&self, ct: ControlTable) -> u32 {
+        u32::from_le_bytes([
+            self.bits[ct.to_address() as usize],
+            self.bits[ct.to_address() as usize + 1],
+            self.bits[ct.to_address() as usize + 2],
+            self.bits[ct.to_address() as usize + 3],
+        ])
+    }
+}
+
+impl ParseData<i32> for R {
+    fn to_data(&self, ct: ControlTable) -> i32 {
+        i32::from_le_bytes([
+            self.bits[ct.to_address() as usize],
+            self.bits[ct.to_address() as usize + 1],
+            self.bits[ct.to_address() as usize + 2],
+            self.bits[ct.to_address() as usize + 3],
+        ])
+    }
+}
+
 impl R {
     /// Reads raw bits from register.
     #[inline(always)]
     pub fn bits(&self) -> Ux {
         self.bits
     }
-    pub fn id(&self) -> u8 {
-        self.bits[ControlTable::ID.to_address() as usize]
+    pub fn model_number(
+        &self,
+    ) -> <() as CustomIntHelperTrait<{ ControlTable::ModelNumber as usize }>>::Ty {
+        self.to_data(ControlTable::ModelNumber)
+    }
+    pub fn model_information(
+        &self,
+    ) -> <() as CustomIntHelperTrait<{ ControlTable::ModelInformation as usize }>>::Ty {
+        self.to_data(ControlTable::ModelInformation)
+    }
+    pub fn firmware_version(
+        &self,
+    ) -> <() as CustomIntHelperTrait<{ ControlTable::FirmwareVersion as usize }>>::Ty {
+        self.to_data(ControlTable::FirmwareVersion)
+    }
+    pub fn id(&self) -> <() as CustomIntHelperTrait<{ ControlTable::ID as usize }>>::Ty {
+        self.to_data(ControlTable::ID)
     }
 }
 
@@ -368,22 +490,40 @@ impl W {
         self.bits = bits;
         self
     }
-    pub fn id(&mut self) -> BaseW<u8> {
-        BaseW::<u8> {
-            w: self,
-            ct: ControlTable::ID,
-            _type: marker::PhantomData
-        }
-    }
-    pub fn model_number(&mut self) -> BaseW<u16> {
-        BaseW::<u16> {
+    pub fn model_number(
+        &mut self,
+    ) -> BaseW<<() as CustomIntHelperTrait<{ ControlTable::ModelNumber as usize }>>::Ty> {
+        BaseW {
             w: self,
             ct: ControlTable::ModelNumber,
-            _type: marker::PhantomData
+            _type: marker::PhantomData,
         }
     }
-
-
+    pub fn model_information(
+        &mut self,
+    ) -> BaseW<<() as CustomIntHelperTrait<{ ControlTable::ModelInformation as usize }>>::Ty> {
+        BaseW {
+            w: self,
+            ct: ControlTable::ModelInformation,
+            _type: marker::PhantomData,
+        }
+    }
+    pub fn firmware_version(
+        &mut self,
+    ) -> BaseW<<() as CustomIntHelperTrait<{ ControlTable::FirmwareVersion as usize }>>::Ty> {
+        BaseW {
+            w: self,
+            ct: ControlTable::FirmwareVersion,
+            _type: marker::PhantomData,
+        }
+    }
+    pub fn id(&mut self) -> BaseW<<() as CustomIntHelperTrait<{ ControlTable::ID as usize }>>::Ty> {
+        BaseW {
+            w: self,
+            ct: ControlTable::ID,
+            _type: marker::PhantomData,
+        }
+    }
 }
 
 pub struct BaseW<'a, T> {
@@ -414,9 +554,43 @@ impl<'a> BitsW<'a, u16> for BaseW<'a, u16> {
     }
 }
 
+impl<'a> BitsW<'a, i16> for BaseW<'a, i16> {
+    #[inline(always)]
+    fn bits(self, value: i16) -> &'a mut W {
+        let v = value.to_le_bytes();
+        self.w.bits[self.ct.to_address() as usize] = v[0];
+        self.w.bits[self.ct.to_address() as usize + 1] = v[1];
+        self.w
+    }
+}
+
+impl<'a> BitsW<'a, u32> for BaseW<'a, u32> {
+    #[inline(always)]
+    fn bits(self, value: u32) -> &'a mut W {
+        let v = value.to_le_bytes();
+        self.w.bits[self.ct.to_address() as usize] = v[0];
+        self.w.bits[self.ct.to_address() as usize + 1] = v[1];
+        self.w.bits[self.ct.to_address() as usize + 2] = v[2];
+        self.w.bits[self.ct.to_address() as usize + 3] = v[3];
+        self.w
+    }
+}
+
+impl<'a> BitsW<'a, i32> for BaseW<'a, i32> {
+    #[inline(always)]
+    fn bits(self, value: i32) -> &'a mut W {
+        let v = value.to_le_bytes();
+        self.w.bits[self.ct.to_address() as usize] = v[0];
+        self.w.bits[self.ct.to_address() as usize + 1] = v[1];
+        self.w.bits[self.ct.to_address() as usize + 2] = v[2];
+        self.w.bits[self.ct.to_address() as usize + 3] = v[3];
+        self.w
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::control_table::{ControlTable, ControlTableData, W, BitsW};
+    use crate::control_table::{BitsW, ControlTable, ControlTableData, W};
 
     #[test]
     fn to_address() {
@@ -448,6 +622,7 @@ mod tests {
         assert_eq!(ctd.read().bits(), [0, 0, 0, 0, 0, 0, 0, 2]);
         ctd.write(|w| w.model_number().bits(0x4321));
         assert_eq!(ctd.read().bits(), [0x21, 0x43, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(ctd.read().model_number(), 0x4321);
         ctd.modify(|_, w| w.id().bits(2));
         assert_eq!(ctd.read().bits(), [0x21, 0x43, 0, 0, 0, 0, 0, 2]);
 

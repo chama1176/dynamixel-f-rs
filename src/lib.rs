@@ -5,7 +5,6 @@
 #![allow(unused_imports)]
 pub mod control_data;
 pub mod control_table;
-pub mod control_table_data;
 mod data_spec;
 mod instruction;
 pub mod packet_handler;
