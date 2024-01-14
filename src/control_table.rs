@@ -1,6 +1,6 @@
 use crate::data_spec::{self, DataSpec};
 use core::cell::Cell;
-use core::marker;
+use core::{marker, mem};
 
 #[allow(dead_code)]
 pub enum ControlTable {
@@ -98,6 +98,28 @@ pub enum ControlTable {
     IndirectData18,
     IndirectData19,
     IndirectData20,
+}
+
+pub trait CustomIntHelperTrait<const N: usize> {
+    type Ty;
+}
+impl CustomIntHelperTrait<{ ControlTable::ModelNumber as usize }> for () {
+    type Ty = u16;
+}
+impl CustomIntHelperTrait<{ ControlTable::ModelInformation as usize }> for () {
+    type Ty = u32;
+}
+impl CustomIntHelperTrait<{ ControlTable::FirmwareVersion as usize }> for () {
+    type Ty = u8;
+}
+impl CustomIntHelperTrait<{ ControlTable::ID as usize }> for () {
+    type Ty = u8;
+}
+
+macro_rules! size_of {
+    ($input:expr) => {
+        core::mem::size_of::<<() as CustomIntHelperTrait<{ $input as usize }>>::Ty>() as u16
+    };
 }
 
 #[allow(dead_code)]
@@ -203,7 +225,7 @@ impl ControlTable {
 
     pub fn to_size(&self) -> u16 {
         match self {
-            ControlTable::ModelNumber => 2,
+            ControlTable::ModelNumber => size_of!(ControlTable::ModelNumber),
             ControlTable::ModelInformation => 4,
             ControlTable::FirmwareVersion => 1,
             ControlTable::ID => 1,
@@ -300,64 +322,6 @@ impl ControlTable {
         }
     }
 }
-
-// trait CustomIntHelperTrait<const N: i8> {
-//     type Ty;
-// }
-// impl CustomIntHelperTrait<8> for () {
-//     type Ty = u8;
-// }
-// impl CustomIntHelperTrait<16> for () {
-//     type Ty = u16;
-// }
-// impl CustomIntHelperTrait<32> for () {
-//     type Ty = u32;
-// }
-// impl CustomIntHelperTrait<-16> for () {
-//     type Ty = i16;
-// }
-// impl CustomIntHelperTrait<-32> for () {
-//     type Ty = i32;
-// }
-// type ControlTableSize = <() as CustomIntHelperTrait<
-//     {
-//         let size = (HEIGHT * WIDTH).next_power_of_two();
-//         assert!(size <= 128, "HEIGHT * WIDTH is too large");
-//         if size >= 8 {
-//             size
-//         } else {
-//             8
-//         }
-//     }
-// >>::Ty;
-
-pub trait CustomIntHelperTrait<const N: usize> {
-    type Ty;
-}
-impl CustomIntHelperTrait<{ ControlTable::ModelNumber as usize }> for () {
-    type Ty = u16;
-}
-impl CustomIntHelperTrait<{ ControlTable::ModelInformation as usize }> for () {
-    type Ty = u32;
-}
-impl CustomIntHelperTrait<{ ControlTable::FirmwareVersion as usize }> for () {
-    type Ty = u8;
-}
-impl CustomIntHelperTrait<{ ControlTable::ID as usize }> for () {
-    type Ty = u8;
-}
-
-// macro_rules! to_type {
-//     ($input:expr) => {
-//         match ($input) {
-//             ControlTable::ModelNumber => u16,
-//             ControlTable::ModelInformation => u32,
-//             ControlTable::FirmwareVersion => u8,
-//             ControlTable::ID => u8,
-//             _ => u8,
-//         }
-//     }
-// }
 
 type Ux = [u8; 8];
 pub struct ControlTableData {
@@ -598,6 +562,14 @@ mod tests {
         assert_eq!(name.to_address(), 0);
         assert_eq!(ControlTable::TorqueEnable.to_address(), 64)
     }
+
+    #[test]
+    fn to_size() {
+        let name = ControlTable::ModelNumber;
+        assert_eq!(name.to_size(), 2);
+        assert_eq!(ControlTable::ModelInformation.to_size(), 4)
+    }
+
     #[test]
     fn read() {
         let ctd = ControlTableData::new();
