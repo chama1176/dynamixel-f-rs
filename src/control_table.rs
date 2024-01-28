@@ -100,25 +100,295 @@ pub enum ControlTable {
     IndirectData20,
 }
 
-pub trait CustomIntHelperTrait<const N: usize> {
+pub trait CustomInt<const N: usize> {
     type Ty;
 }
-impl CustomIntHelperTrait<{ ControlTable::ModelNumber as usize }> for () {
+impl CustomInt<{ ControlTable::ModelNumber as usize }> for () {
     type Ty = u16;
 }
-impl CustomIntHelperTrait<{ ControlTable::ModelInformation as usize }> for () {
+impl CustomInt<{ ControlTable::ModelInformation as usize }> for () {
     type Ty = u32;
 }
-impl CustomIntHelperTrait<{ ControlTable::FirmwareVersion as usize }> for () {
+impl CustomInt<{ ControlTable::FirmwareVersion as usize }> for () {
     type Ty = u8;
 }
-impl CustomIntHelperTrait<{ ControlTable::ID as usize }> for () {
+impl CustomInt<{ ControlTable::ID as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::BaudRate as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::ReturnDelayTime as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::DriveMode as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::OperatingMode as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::SecondaryID as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::ProtocolType as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::HomingOffset as usize }> for () {
+    type Ty = i32;
+}
+impl CustomInt<{ ControlTable::MovingThreshold as usize }> for () {
+    type Ty = u32;
+}
+impl CustomInt<{ ControlTable::TemperatureLimit as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::MaxVoltageLimit as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::MinVoltageLimit as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::PWMLimit as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::CurrentLimit as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::VelocityLimit as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::MaxPositionLimit as usize }> for () {
+    type Ty = u32;
+}
+impl CustomInt<{ ControlTable::MinPositionLimit as usize }> for () {
+    type Ty = u32;
+}
+impl CustomInt<{ ControlTable::StartupConfiguration as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::PWMSlope as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::Shutdown as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::TorqueEnable as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::LED as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::StatusReturnLevel as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::RegisteredInstruction as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::HardwareErrorStatus as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::VelocityIGain as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::VelocityPgain as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::PositionDGain as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::PositionIGain as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::PositionPGain as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::Feedforward2ndGain as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::Feedforward1stGain as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::BusWatchdog as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::GoalPWM as usize }> for () {
+    type Ty = i16;
+}
+impl CustomInt<{ ControlTable::GoalCurrent as usize }> for () {
+    type Ty = i16;
+}
+impl CustomInt<{ ControlTable::GoalVelocity as usize }> for () {
+    type Ty = i32;
+}
+impl CustomInt<{ ControlTable::ProfileAccleration as usize }> for () {
+    type Ty = u32;
+}
+impl CustomInt<{ ControlTable::ProfileVelocity as usize }> for () {
+    type Ty = u32;
+}
+impl CustomInt<{ ControlTable::GoalPosition as usize }> for () {
+    type Ty = u32;
+}
+impl CustomInt<{ ControlTable::RealtimeTick as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::Moving as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::MovingStatus as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::PresentPWM as usize }> for () {
+    type Ty = i16;
+}
+impl CustomInt<{ ControlTable::PresentCurrent as usize }> for () {
+    type Ty = i16;
+}
+impl CustomInt<{ ControlTable::PresentVelocity as usize }> for () {
+    type Ty = i32;
+}
+impl CustomInt<{ ControlTable::PresentPosition as usize }> for () {
+    type Ty = i32;
+}
+impl CustomInt<{ ControlTable::VelocityTrajectory as usize }> for () {
+    type Ty = i32;
+}
+impl CustomInt<{ ControlTable::PositionTrajectory as usize }> for () {
+    type Ty = i32;
+}
+impl CustomInt<{ ControlTable::PresentInputVoltage as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::PresentTemperature as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::BackupReady as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectAddress1 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress2 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress3 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress4 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress5 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress6 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress7 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress8 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress9 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress10 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress11 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress12 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress13 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress14 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress15 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress16 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress17 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress18 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress19 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectAddress20 as usize }> for () {
+    type Ty = u16;
+}
+impl CustomInt<{ ControlTable::IndirectData1 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData2 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData3 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData4 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData5 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData6 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData7 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData8 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData9 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData10 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData11 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData12 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData13 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData14 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData15 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData16 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData17 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData18 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData19 as usize }> for () {
+    type Ty = u8;
+}
+impl CustomInt<{ ControlTable::IndirectData20 as usize }> for () {
     type Ty = u8;
 }
 
 macro_rules! size_of {
     ($input:expr) => {
-        core::mem::size_of::<<() as CustomIntHelperTrait<{ $input as usize }>>::Ty>() as u16
+        core::mem::size_of::<<() as CustomInt<{ $input as usize }>>::Ty>() as u16
     };
 }
 
@@ -225,7 +495,7 @@ impl ControlTable {
 
     pub fn to_size(&self) -> u16 {
         match self {
-            ControlTable::ModelNumber => size_of!(ControlTable::ModelNumber),
+            ControlTable::ModelNumber => 2,
             ControlTable::ModelInformation => 4,
             ControlTable::FirmwareVersion => 1,
             ControlTable::ID => 1,
@@ -419,24 +689,293 @@ impl R {
     pub fn bits(&self) -> Ux {
         self.bits
     }
-    pub fn model_number(
-        &self,
-    ) -> <() as CustomIntHelperTrait<{ ControlTable::ModelNumber as usize }>>::Ty {
+    pub fn model_number(&self) -> <() as CustomInt<{ ControlTable::ModelNumber as usize }>>::Ty {
         self.to_data(ControlTable::ModelNumber)
     }
     pub fn model_information(
         &self,
-    ) -> <() as CustomIntHelperTrait<{ ControlTable::ModelInformation as usize }>>::Ty {
+    ) -> <() as CustomInt<{ ControlTable::ModelInformation as usize }>>::Ty {
         self.to_data(ControlTable::ModelInformation)
     }
     pub fn firmware_version(
         &self,
-    ) -> <() as CustomIntHelperTrait<{ ControlTable::FirmwareVersion as usize }>>::Ty {
+    ) -> <() as CustomInt<{ ControlTable::FirmwareVersion as usize }>>::Ty {
         self.to_data(ControlTable::FirmwareVersion)
     }
-    pub fn id(&self) -> <() as CustomIntHelperTrait<{ ControlTable::ID as usize }>>::Ty {
+    pub fn id(&self) -> <() as CustomInt<{ ControlTable::ID as usize }>>::Ty {
         self.to_data(ControlTable::ID)
     }
+    pub fn baud_rate(&self) -> <() as CustomInt<{ ControlTable::BaudRate as usize }>>::Ty {
+        self.to_data(ControlTable::BaudRate)
+    }
+    pub fn return_delay_time(&self) -> <() as CustomInt<{ ControlTable::ReturnDelayTime as usize }>>::Ty {
+        self.to_data(ControlTable::ReturnDelayTime)
+    }
+    pub fn drive_mode(&self) -> <() as CustomInt<{ ControlTable::DriveMode as usize }>>::Ty {
+        self.to_data(ControlTable::DriveMode)
+    }
+    pub fn operating_mode(&self) -> <() as CustomInt<{ ControlTable::OperatingMode as usize }>>::Ty {
+        self.to_data(ControlTable::OperatingMode)
+    }
+    pub fn secondary_id(&self) -> <() as CustomInt<{ ControlTable::SecondaryID as usize }>>::Ty {
+        self.to_data(ControlTable::SecondaryID)
+    }
+    pub fn protocol_type(&self) -> <() as CustomInt<{ ControlTable::ProtocolType as usize }>>::Ty {
+        self.to_data(ControlTable::ProtocolType)
+    }
+    pub fn homing_offset(&self) -> <() as CustomInt<{ ControlTable::HomingOffset as usize }>>::Ty {
+        self.to_data(ControlTable::HomingOffset)
+    }
+    pub fn moving_threshold(&self) -> <() as CustomInt<{ ControlTable::MovingThreshold as usize }>>::Ty {
+        self.to_data(ControlTable::MovingThreshold)
+    }
+    pub fn temperature_limit(&self) -> <() as CustomInt<{ ControlTable::TemperatureLimit as usize }>>::Ty {
+        self.to_data(ControlTable::TemperatureLimit)
+    }
+    pub fn max_voltage_limit(&self) -> <() as CustomInt<{ ControlTable::MaxVoltageLimit as usize }>>::Ty {
+        self.to_data(ControlTable::MaxVoltageLimit)
+    }
+    pub fn min_voltage_limit(&self) -> <() as CustomInt<{ ControlTable::MinVoltageLimit as usize }>>::Ty {
+        self.to_data(ControlTable::MinVoltageLimit)
+    }
+    pub fn pwm_limit(&self) -> <() as CustomInt<{ ControlTable::PWMLimit as usize }>>::Ty {
+        self.to_data(ControlTable::PWMLimit)
+    }
+    pub fn current_limit(&self) -> <() as CustomInt<{ ControlTable::CurrentLimit as usize }>>::Ty {
+        self.to_data(ControlTable::CurrentLimit)
+    }
+    pub fn velocity_limit(&self) -> <() as CustomInt<{ ControlTable::VelocityLimit as usize }>>::Ty {
+        self.to_data(ControlTable::VelocityLimit)
+    }
+    pub fn max_position_limit(&self) -> <() as CustomInt<{ ControlTable::MaxPositionLimit as usize }>>::Ty {
+        self.to_data(ControlTable::MaxPositionLimit)
+    }
+    pub fn min_position_limit(&self) -> <() as CustomInt<{ ControlTable::MinPositionLimit as usize }>>::Ty {
+        self.to_data(ControlTable::MinPositionLimit)
+    }
+    pub fn startup_configuration(&self) -> <() as CustomInt<{ ControlTable::StartupConfiguration as usize }>>::Ty {
+        self.to_data(ControlTable::StartupConfiguration)
+    }
+    pub fn pwm_slope(&self) -> <() as CustomInt<{ ControlTable::PWMSlope as usize }>>::Ty {
+        self.to_data(ControlTable::PWMSlope)
+    }
+    pub fn shutdown(&self) -> <() as CustomInt<{ ControlTable::Shutdown as usize }>>::Ty {
+        self.to_data(ControlTable::Shutdown)
+    }
+    pub fn torque_enable(&self) -> <() as CustomInt<{ ControlTable::TorqueEnable as usize }>>::Ty {
+        self.to_data(ControlTable::TorqueEnable)
+    }
+    pub fn led(&self) -> <() as CustomInt<{ ControlTable::LED as usize }>>::Ty {
+        self.to_data(ControlTable::LED)
+    }
+    pub fn status_return_level(&self) -> <() as CustomInt<{ ControlTable::StatusReturnLevel as usize }>>::Ty {
+        self.to_data(ControlTable::StatusReturnLevel)
+    }
+    pub fn registered_instruction(&self) -> <() as CustomInt<{ ControlTable::RegisteredInstruction as usize }>>::Ty {
+        self.to_data(ControlTable::RegisteredInstruction)
+    }
+    pub fn hardware_error_status(&self) -> <() as CustomInt<{ ControlTable::HardwareErrorStatus as usize }>>::Ty {
+        self.to_data(ControlTable::HardwareErrorStatus)
+    }
+    pub fn velocity_igain(&self) -> <() as CustomInt<{ ControlTable::VelocityIGain as usize }>>::Ty {
+        self.to_data(ControlTable::VelocityIGain)
+    }
+    pub fn velocity_pgain(&self) -> <() as CustomInt<{ ControlTable::VelocityPgain as usize }>>::Ty {
+        self.to_data(ControlTable::VelocityPgain)
+    }
+    pub fn position_dgain(&self) -> <() as CustomInt<{ ControlTable::PositionDGain as usize }>>::Ty {
+        self.to_data(ControlTable::PositionDGain)
+    }
+    pub fn position_igain(&self) -> <() as CustomInt<{ ControlTable::PositionIGain as usize }>>::Ty {
+        self.to_data(ControlTable::PositionIGain)
+    }
+    pub fn position_pgain(&self) -> <() as CustomInt<{ ControlTable::PositionPGain as usize }>>::Ty {
+        self.to_data(ControlTable::PositionPGain)
+    }
+    pub fn feedforward2nd_gain(&self) -> <() as CustomInt<{ ControlTable::Feedforward2ndGain as usize }>>::Ty {
+        self.to_data(ControlTable::Feedforward2ndGain)
+    }
+    pub fn feedforward1st_gain(&self) -> <() as CustomInt<{ ControlTable::Feedforward1stGain as usize }>>::Ty {
+        self.to_data(ControlTable::Feedforward1stGain)
+    }
+    pub fn bus_watchdog(&self) -> <() as CustomInt<{ ControlTable::BusWatchdog as usize }>>::Ty {
+        self.to_data(ControlTable::BusWatchdog)
+    }
+    pub fn goal_pwm(&self) -> <() as CustomInt<{ ControlTable::GoalPWM as usize }>>::Ty {
+        self.to_data(ControlTable::GoalPWM)
+    }
+    pub fn goal_current(&self) -> <() as CustomInt<{ ControlTable::GoalCurrent as usize }>>::Ty {
+        self.to_data(ControlTable::GoalCurrent)
+    }
+    pub fn goal_velocity(&self) -> <() as CustomInt<{ ControlTable::GoalVelocity as usize }>>::Ty {
+        self.to_data(ControlTable::GoalVelocity)
+    }
+    pub fn profile_accleration(&self) -> <() as CustomInt<{ ControlTable::ProfileAccleration as usize }>>::Ty {
+        self.to_data(ControlTable::ProfileAccleration)
+    }
+    pub fn profile_velocity(&self) -> <() as CustomInt<{ ControlTable::ProfileVelocity as usize }>>::Ty {
+        self.to_data(ControlTable::ProfileVelocity)
+    }
+    pub fn goal_position(&self) -> <() as CustomInt<{ ControlTable::GoalPosition as usize }>>::Ty {
+        self.to_data(ControlTable::GoalPosition)
+    }
+    pub fn realtime_tick(&self) -> <() as CustomInt<{ ControlTable::RealtimeTick as usize }>>::Ty {
+        self.to_data(ControlTable::RealtimeTick)
+    }
+    pub fn moving(&self) -> <() as CustomInt<{ ControlTable::Moving as usize }>>::Ty {
+        self.to_data(ControlTable::Moving)
+    }
+    pub fn moving_status(&self) -> <() as CustomInt<{ ControlTable::MovingStatus as usize }>>::Ty {
+        self.to_data(ControlTable::MovingStatus)
+    }
+    pub fn present_pwm(&self) -> <() as CustomInt<{ ControlTable::PresentPWM as usize }>>::Ty {
+        self.to_data(ControlTable::PresentPWM)
+    }
+    pub fn present_current(&self) -> <() as CustomInt<{ ControlTable::PresentCurrent as usize }>>::Ty {
+        self.to_data(ControlTable::PresentCurrent)
+    }
+    pub fn present_velocity(&self) -> <() as CustomInt<{ ControlTable::PresentVelocity as usize }>>::Ty {
+        self.to_data(ControlTable::PresentVelocity)
+    }
+    pub fn present_position(&self) -> <() as CustomInt<{ ControlTable::PresentPosition as usize }>>::Ty {
+        self.to_data(ControlTable::PresentPosition)
+    }
+    pub fn velocity_trajectory(&self) -> <() as CustomInt<{ ControlTable::VelocityTrajectory as usize }>>::Ty {
+        self.to_data(ControlTable::VelocityTrajectory)
+    }
+    pub fn position_trajectory(&self) -> <() as CustomInt<{ ControlTable::PositionTrajectory as usize }>>::Ty {
+        self.to_data(ControlTable::PositionTrajectory)
+    }
+    pub fn present_input_voltage(&self) -> <() as CustomInt<{ ControlTable::PresentInputVoltage as usize }>>::Ty {
+        self.to_data(ControlTable::PresentInputVoltage)
+    }
+    pub fn present_temperature(&self) -> <() as CustomInt<{ ControlTable::PresentTemperature as usize }>>::Ty {
+        self.to_data(ControlTable::PresentTemperature)
+    }
+    pub fn backup_ready(&self) -> <() as CustomInt<{ ControlTable::BackupReady as usize }>>::Ty {
+        self.to_data(ControlTable::BackupReady)
+    }
+    pub fn indirect_address1(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress1 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress1)
+    }
+    pub fn indirect_address2(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress2 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress2)
+    }
+    pub fn indirect_address3(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress3 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress3)
+    }
+    pub fn indirect_address4(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress4 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress4)
+    }
+    pub fn indirect_address5(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress5 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress5)
+    }
+    pub fn indirect_address6(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress6 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress6)
+    }
+    pub fn indirect_address7(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress7 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress7)
+    }
+    pub fn indirect_address8(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress8 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress8)
+    }
+    pub fn indirect_address9(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress9 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress9)
+    }
+    pub fn indirect_address10(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress10 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress10)
+    }
+    pub fn indirect_address11(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress11 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress11)
+    }
+    pub fn indirect_address12(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress12 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress12)
+    }
+    pub fn indirect_address13(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress13 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress13)
+    }
+    pub fn indirect_address14(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress14 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress14)
+    }
+    pub fn indirect_address15(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress15 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress15)
+    }
+    pub fn indirect_address16(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress16 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress16)
+    }
+    pub fn indirect_address17(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress17 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress17)
+    }
+    pub fn indirect_address18(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress18 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress18)
+    }
+    pub fn indirect_address19(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress19 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress19)
+    }
+    pub fn indirect_address20(&self) -> <() as CustomInt<{ ControlTable::IndirectAddress1 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectAddress1)
+    }
+    pub fn indirect_data1(&self) -> <() as CustomInt<{ ControlTable::IndirectData1 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData1)
+    }
+    pub fn indirect_data2(&self) -> <() as CustomInt<{ ControlTable::IndirectData2 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData2)
+    }
+    pub fn indirect_data3(&self) -> <() as CustomInt<{ ControlTable::IndirectData3 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData3)
+    }
+    pub fn indirect_data4(&self) -> <() as CustomInt<{ ControlTable::IndirectData4 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData4)
+    }
+    pub fn indirect_data5(&self) -> <() as CustomInt<{ ControlTable::IndirectData5 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData5)
+    }
+    pub fn indirect_data6(&self) -> <() as CustomInt<{ ControlTable::IndirectData6 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData6)
+    }
+    pub fn indirect_data7(&self) -> <() as CustomInt<{ ControlTable::IndirectData7 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData7)
+    }
+    pub fn indirect_data8(&self) -> <() as CustomInt<{ ControlTable::IndirectData8 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData8)
+    }
+    pub fn indirect_data9(&self) -> <() as CustomInt<{ ControlTable::IndirectData9 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData9)
+    }
+    pub fn indirect_data10(&self) -> <() as CustomInt<{ ControlTable::IndirectData10 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData10)
+    }
+    pub fn indirect_data11(&self) -> <() as CustomInt<{ ControlTable::IndirectData11 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData11)
+    }
+    pub fn indirect_data12(&self) -> <() as CustomInt<{ ControlTable::IndirectData12 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData12)
+    }
+    pub fn indirect_data13(&self) -> <() as CustomInt<{ ControlTable::IndirectData13 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData13)
+    }
+    pub fn indirect_data14(&self) -> <() as CustomInt<{ ControlTable::IndirectData14 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData14)
+    }
+    pub fn indirect_data15(&self) -> <() as CustomInt<{ ControlTable::IndirectData15 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData15)
+    }
+    pub fn indirect_data16(&self) -> <() as CustomInt<{ ControlTable::IndirectData16 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData16)
+    }
+    pub fn indirect_data17(&self) -> <() as CustomInt<{ ControlTable::IndirectData17 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData17)
+    }
+    pub fn indirect_data18(&self) -> <() as CustomInt<{ ControlTable::IndirectData18 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData18)
+    }
+    pub fn indirect_data19(&self) -> <() as CustomInt<{ ControlTable::IndirectData19 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData19)
+    }
+    pub fn indirect_data20(&self) -> <() as CustomInt<{ ControlTable::IndirectData20 as usize }>>::Ty {
+        self.to_data(ControlTable::IndirectData20)
+    }
+
 }
 
 /// Register writer.
@@ -456,7 +995,7 @@ impl W {
     }
     pub fn model_number(
         &mut self,
-    ) -> BaseW<<() as CustomIntHelperTrait<{ ControlTable::ModelNumber as usize }>>::Ty> {
+    ) -> BaseW<<() as CustomInt<{ ControlTable::ModelNumber as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::ModelNumber,
@@ -465,7 +1004,7 @@ impl W {
     }
     pub fn model_information(
         &mut self,
-    ) -> BaseW<<() as CustomIntHelperTrait<{ ControlTable::ModelInformation as usize }>>::Ty> {
+    ) -> BaseW<<() as CustomInt<{ ControlTable::ModelInformation as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::ModelInformation,
@@ -474,20 +1013,22 @@ impl W {
     }
     pub fn firmware_version(
         &mut self,
-    ) -> BaseW<<() as CustomIntHelperTrait<{ ControlTable::FirmwareVersion as usize }>>::Ty> {
+    ) -> BaseW<<() as CustomInt<{ ControlTable::FirmwareVersion as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::FirmwareVersion,
             _type: marker::PhantomData,
         }
     }
-    pub fn id(&mut self) -> BaseW<<() as CustomIntHelperTrait<{ ControlTable::ID as usize }>>::Ty> {
+    pub fn id(&mut self) -> BaseW<<() as CustomInt<{ ControlTable::ID as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::ID,
             _type: marker::PhantomData,
         }
     }
+
+
 }
 
 pub struct BaseW<'a, T> {
@@ -555,6 +1096,7 @@ impl<'a> BitsW<'a, i32> for BaseW<'a, i32> {
 #[cfg(test)]
 mod tests {
     use crate::control_table::{BitsW, ControlTable, ControlTableData, W};
+    use crate::control_table::CustomInt;
 
     #[test]
     fn to_address() {
@@ -568,6 +1110,12 @@ mod tests {
         let name = ControlTable::ModelNumber;
         assert_eq!(name.to_size(), 2);
         assert_eq!(ControlTable::ModelInformation.to_size(), 4)
+    }
+
+    #[test]
+    fn to_size_and_type() {
+        const NAME: ControlTable = ControlTable::ModelNumber;
+        assert_eq!(NAME.to_size(), size_of!(NAME));
     }
 
     #[test]

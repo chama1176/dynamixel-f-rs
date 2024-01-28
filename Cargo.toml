@@ -8,3 +8,7 @@ edition = "2021"
 [dependencies]
 heapless = "0.7.10"
 spin = "0.9.3"
+
+[dev-dependencies]
+# approx         = { version = "0.5", default-features = false }
+# assert_approx_eq = "1.1.0"
