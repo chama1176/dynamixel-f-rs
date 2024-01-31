@@ -591,7 +591,8 @@ impl ControlTable {
     }
 }
 
-type Ux = [u8; 8];
+const CONTROL_TABLE_SIZE: usize = 227;
+type Ux = [u8; CONTROL_TABLE_SIZE];
 pub struct ControlTableData {
     value: Cell<Ux>,
     // value: [Cell<u8>; 8],だと要素ごとに.getしないといけないのが大変そうなので上で進めてみる
@@ -600,7 +601,7 @@ pub struct ControlTableData {
 impl ControlTableData {
     pub fn new() -> Self {
         Self {
-            value: Cell::new([0; 8]),
+            value: Cell::new([0; CONTROL_TABLE_SIZE]),
         }
     }
     pub fn read(&self) -> R {
@@ -620,7 +621,7 @@ impl ControlTableData {
     where
         F: FnOnce(&mut W) -> &mut W,
     {
-        self.value.set(f(&mut W { bits: [0; 8] }).bits);
+        self.value.set(f(&mut W { bits: [0; CONTROL_TABLE_SIZE] }).bits);
     }
 }
 
@@ -2033,6 +2034,7 @@ impl<'a> BitsW<'a, i32> for BaseW<'a, i32> {
 
 #[cfg(test)]
 mod tests {
+    use crate::control_table::CONTROL_TABLE_SIZE;
     use crate::control_table::CustomInt;
     use crate::control_table::{BitsW, ControlTable, ControlTableData, W};
 
@@ -2073,32 +2075,37 @@ mod tests {
     #[test]
     fn read() {
         let ctd = ControlTableData::new();
-        assert_eq!(ctd.read().bits(), [0; 8])
+        assert_eq!(ctd.read().bits(), [0; CONTROL_TABLE_SIZE])
     }
 
     #[test]
     fn write() {
         let ctd = ControlTableData::new();
-        ctd.write(|w| w.bits([1, 2, 3, 4, 5, 6, 7, 8]));
-        assert_eq!(ctd.read().bits(), [1, 2, 3, 4, 5, 6, 7, 8])
+        ctd.write(|w| w.bits([1; CONTROL_TABLE_SIZE]));
+        assert_eq!(ctd.read().bits(), [1; CONTROL_TABLE_SIZE]);
     }
 
     #[test]
     fn modify() {
         let ctd = ControlTableData::new();
-        ctd.write(|w| w.bits([1, 2, 3, 4, 5, 6, 7, 8]));
-        assert_eq!(ctd.read().bits(), [1, 2, 3, 4, 5, 6, 7, 8]);
-        ctd.modify(|_, w| w.bits([1, 2, 3, 4, 5, 6, 7, 8]));
-        assert_eq!(ctd.read().bits(), [1, 2, 3, 4, 5, 6, 7, 8]);
-        ctd.write(|w| w.id().bits(2));
-        assert_eq!(ctd.read().bits(), [0, 0, 0, 0, 0, 0, 0, 2]);
+        ctd.write(|w| w.bits([1; CONTROL_TABLE_SIZE]));
+        assert_eq!(ctd.read().bits(), [1; CONTROL_TABLE_SIZE]);
+        ctd.modify(|_, w| w.bits([2; CONTROL_TABLE_SIZE]));
+        assert_eq!(ctd.read().bits(), [2; CONTROL_TABLE_SIZE]);
+        ctd.write(|w| w.id().bits(3));
+        assert_eq!(ctd.read().bits()[0..9], [0, 0, 0, 0, 0, 0, 0, 3, 0]);
         ctd.write(|w| w.model_number().bits(0x4321));
-        assert_eq!(ctd.read().bits(), [0x21, 0x43, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(ctd.read().bits()[0..9], [0x21, 0x43, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(ctd.read().model_number(), 0x4321);
         ctd.modify(|_, w| w.id().bits(2));
-        assert_eq!(ctd.read().bits(), [0x21, 0x43, 0, 0, 0, 0, 0, 2]);
-
-        // TODO: テストをもう少し修正した方がよい
+        assert_eq!(ctd.read().bits()[0..9], [0x21, 0x43, 0, 0, 0, 0, 0, 2, 0]);
     }
+
+    #[test]
+    fn write_each_field() {
+        let ctd = ControlTableData::new();
+        ctd.write(|w| w.indirect_address1().bits(0x2222));
+    }
+
 
 }
