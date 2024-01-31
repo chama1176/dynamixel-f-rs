@@ -1,8 +1,12 @@
 use crate::data_spec::{self, DataSpec};
 use core::cell::Cell;
 use core::{marker, mem};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
+use strum_macros::FromRepr;
 
 #[allow(dead_code)]
+#[derive(FromRepr, EnumIter, Debug, PartialEq)]
 pub enum ControlTable {
     ModelNumber,
     ModelInformation,
@@ -2033,6 +2037,14 @@ mod tests {
     use crate::control_table::{BitsW, ControlTable, ControlTableData, W};
 
     #[test]
+    fn from_repr() {
+        let idx: u16 = 2;
+        let name = ControlTable::from_repr(idx as usize).unwrap();
+
+        assert_eq!(name, ControlTable::FirmwareVersion);
+    }
+
+    #[test]
     fn to_address() {
         let name = ControlTable::ModelNumber;
 
@@ -2089,100 +2101,4 @@ mod tests {
         // TODO: テストをもう少し修正した方がよい
     }
 
-    const TABLE_LIST: [ControlTable; 94] = [
-        ControlTable::ModelNumber,
-        ControlTable::ModelInformation,
-        ControlTable::FirmwareVersion,
-        ControlTable::ID,
-        ControlTable::BaudRate,
-        ControlTable::ReturnDelayTime,
-        ControlTable::DriveMode,
-        ControlTable::OperatingMode,
-        ControlTable::SecondaryID,
-        ControlTable::ProtocolType,
-        ControlTable::HomingOffset,
-        ControlTable::MovingThreshold,
-        ControlTable::TemperatureLimit,
-        ControlTable::MaxVoltageLimit,
-        ControlTable::MinVoltageLimit,
-        ControlTable::PWMLimit,
-        ControlTable::CurrentLimit,
-        ControlTable::VelocityLimit,
-        ControlTable::MaxPositionLimit,
-        ControlTable::MinPositionLimit,
-        ControlTable::StartupConfiguration,
-        ControlTable::PWMSlope,
-        ControlTable::Shutdown,
-        ControlTable::TorqueEnable,
-        ControlTable::LED,
-        ControlTable::StatusReturnLevel,
-        ControlTable::RegisteredInstruction,
-        ControlTable::HardwareErrorStatus,
-        ControlTable::VelocityIGain,
-        ControlTable::VelocityPgain,
-        ControlTable::PositionDGain,
-        ControlTable::PositionIGain,
-        ControlTable::PositionPGain,
-        ControlTable::Feedforward2ndGain,
-        ControlTable::Feedforward1stGain,
-        ControlTable::BusWatchdog,
-        ControlTable::GoalPWM,
-        ControlTable::GoalCurrent,
-        ControlTable::GoalVelocity,
-        ControlTable::ProfileAccleration,
-        ControlTable::ProfileVelocity,
-        ControlTable::GoalPosition,
-        ControlTable::RealtimeTick,
-        ControlTable::Moving,
-        ControlTable::MovingStatus,
-        ControlTable::PresentPWM,
-        ControlTable::PresentCurrent,
-        ControlTable::PresentVelocity,
-        ControlTable::PresentPosition,
-        ControlTable::VelocityTrajectory,
-        ControlTable::PositionTrajectory,
-        ControlTable::PresentInputVoltage,
-        ControlTable::PresentTemperature,
-        ControlTable::BackupReady,
-        ControlTable::IndirectAddress1,
-        ControlTable::IndirectAddress2,
-        ControlTable::IndirectAddress3,
-        ControlTable::IndirectAddress4,
-        ControlTable::IndirectAddress5,
-        ControlTable::IndirectAddress6,
-        ControlTable::IndirectAddress7,
-        ControlTable::IndirectAddress8,
-        ControlTable::IndirectAddress9,
-        ControlTable::IndirectAddress10,
-        ControlTable::IndirectAddress11,
-        ControlTable::IndirectAddress12,
-        ControlTable::IndirectAddress13,
-        ControlTable::IndirectAddress14,
-        ControlTable::IndirectAddress15,
-        ControlTable::IndirectAddress16,
-        ControlTable::IndirectAddress17,
-        ControlTable::IndirectAddress18,
-        ControlTable::IndirectAddress19,
-        ControlTable::IndirectAddress20,
-        ControlTable::IndirectData1,
-        ControlTable::IndirectData2,
-        ControlTable::IndirectData3,
-        ControlTable::IndirectData4,
-        ControlTable::IndirectData5,
-        ControlTable::IndirectData6,
-        ControlTable::IndirectData7,
-        ControlTable::IndirectData8,
-        ControlTable::IndirectData9,
-        ControlTable::IndirectData10,
-        ControlTable::IndirectData11,
-        ControlTable::IndirectData12,
-        ControlTable::IndirectData13,
-        ControlTable::IndirectData14,
-        ControlTable::IndirectData15,
-        ControlTable::IndirectData16,
-        ControlTable::IndirectData17,
-        ControlTable::IndirectData18,
-        ControlTable::IndirectData19,
-        ControlTable::IndirectData20,
-    ];
 }

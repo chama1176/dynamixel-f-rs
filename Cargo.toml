@@ -9,6 +9,10 @@ edition = "2021"
 heapless = "0.7.10"
 spin = "0.9.3"
 
+# For enum iter and tryfrom
+strum = "0.26"
+strum_macros = "0.26"
+
 [dev-dependencies]
 # approx         = { version = "0.5", default-features = false }
 # assert_approx_eq = "1.1.0"
