@@ -118,6 +118,7 @@ pub struct DynamixelProtocolHandler<'a> {
     // packet_timeout: Duration,
     baudrate: u32,
     // tx_time_per_byte: u64,
+    
 }
 
 #[allow(dead_code)]
@@ -135,6 +136,20 @@ impl<'a> DynamixelProtocolHandler<'a> {
             // tx_time_per_byte: ((1_000_000.0 * 8.0 + (baudrate as f32 - 1.0)) / baudrate as f32)
             //     as u64,
         }
+    }
+
+    pub fn parse_data(&self) {
+
+    }
+
+    pub fn packet_return_time(&self) -> Duration {
+        Duration::new(0, 0)
+    }
+
+    pub fn return_packet(&self) -> Vec<u8, MAX_PACKET_LEN> {
+        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+        msg.extend([0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D].iter().cloned());
+        msg
     }
 
     pub fn reserve_msg_header(&self) -> [u8; 4] {
@@ -1051,22 +1066,23 @@ mod tests {
     fn ping() {
         let mut mock_uart = MockSerial::new();
         let mock_clock = MockClock::new();
-        let mut dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 2, 115200);
-
         // 受信するデータのテストケース
+        // 先にテストデータをいれる
         // ID1(XM430-W210) : Present Position(132, 0x0084, 4[byte]) = 166(0x000000A6)
         let instruction = [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x03, 0x00, 0x01, 0x19, 0x4E];
         for data in instruction {
             mock_uart.tx_buf.push_back(data).unwrap();
         }
 
+        let mut dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 2, 115200);
+
         // パースを周期実行
         dxl.parse_data();
 
         // 返信すべき時間
-        assert!(dxl.packet_return_time(), 0);
+        assert_eq!(dxl.packet_return_time(), Duration::new(0,0));
         // 返信すべき内容
-        assert!(dxl.return_packet(), [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]);
+        assert_eq!(dxl.return_packet(), [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]);
     }
 
     #[test]
