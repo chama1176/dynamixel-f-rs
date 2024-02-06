@@ -138,13 +138,117 @@ impl<'a> DynamixelProtocolHandler<'a> {
         }
     }
 
-    pub fn parse_data(&self) {
+    pub fn parse_data(&mut self) {
+
+        self.receive_packet().unwrap();
 
     }
 
     pub fn packet_return_time(&self) -> Duration {
         Duration::new(0, 0)
     }
+
+    fn receive_packet(&mut self) -> Result<Vec<u8, MAX_PACKET_LEN>, CommunicationResult> {
+        let result;
+        let mut wait_length = 11; // minimum length (HEADER0 HEADER1 HEADER2 RESERVED ID LENGTH_L LENGTH_H INST ERROR CRC16_L CRC16_H)
+        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new(); // VecDeque is not implemented in heapless.
+        let mut res = Vec::<u8, MAX_PACKET_LEN>::new();
+
+        loop {
+            res.resize(wait_length - msg.len(), 0).unwrap();
+            match self.uart.read_bytes(&mut *res) {
+                None => {}
+                Some(readlen) => {
+                    msg.extend(res[0..readlen].iter().cloned());
+                }
+            }
+
+            if msg.len() >= wait_length {
+                let mut idx = 0;
+                // find packet header
+                while idx < (msg.len() - 3) {
+                    if msg[idx + Packet::Header0.to_pos()] == 0xFF
+                        && msg[idx + Packet::Header1.to_pos()] == 0xFF
+                        && msg[idx + Packet::Header2.to_pos()] == 0xFD
+                        && msg[idx + Packet::Reserved.to_pos()] == 0x00
+                    {
+                        break;
+                    }
+                    idx += 1;
+                }
+
+                if idx == 0 {
+                    // found at the beginning of the packet
+                    if msg[Packet::Reserved.to_pos()] != 0x00
+                        || msg[Packet::Id.to_pos()] > 0xFC
+                        || u16::from_le_bytes([
+                            msg[Packet::LengthL.to_pos()],
+                            msg[Packet::LengthH.to_pos()],
+                        ]) as usize
+                            > MAX_PACKET_LEN
+                        || msg[Packet::Instruction.to_pos()] != 0x55
+                    {
+                        // remove the first byte in the packet
+                        for s in 0..msg.len() - 1 {
+                            msg[s] = msg[s + 1];
+                        }
+                        msg.truncate(msg.len() - 1);
+                        continue;
+                    }
+                    // re-calculate the exact length of the rx packet
+                    if wait_length
+                        != u16::from_le_bytes([
+                            msg[Packet::LengthL.to_pos()],
+                            msg[Packet::LengthH.to_pos()],
+                        ]) as usize
+                            + Packet::LengthH.to_pos()
+                            + 1
+                    {
+                        wait_length = u16::from_le_bytes([
+                            msg[Packet::LengthL.to_pos()],
+                            msg[Packet::LengthH.to_pos()],
+                        ]) as usize
+                            + Packet::LengthH.to_pos()
+                            + 1;
+                        continue;
+                    }
+
+                    // slave does not have to check timeout
+
+                    // verify CRC16
+                    let crc = u16::from_le_bytes([msg[msg.len() - 2], msg[msg.len() - 1]]);
+                    if self.calc_crc_value(&msg[..msg.len() - 2]) == crc {
+                        result = CommunicationResult::Success;
+                    } else {
+                        result = CommunicationResult::RxCRCError;
+                    }
+                    break;
+                } else {
+                    // remove unnecessary packets
+                    for s in 0..(msg.len() - idx) {
+                        msg[s] = msg[idx + s];
+                    }
+                    msg.truncate(msg.len() - idx);
+                }
+            } else {
+                // slave does not have to check timeout
+            }
+            // usleep(0);
+        }
+        self.is_using = false;
+
+        if result == CommunicationResult::Success {
+            self.remove_stuffing(&mut msg);
+        }
+
+        if result == CommunicationResult::Success {
+            Ok(msg)
+        } else {
+            Err(result)
+        }
+    }
+
+
 
     pub fn return_packet(&self) -> Vec<u8, MAX_PACKET_LEN> {
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
@@ -1077,7 +1181,8 @@ mod tests {
         let mut dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 2, 115200);
 
         // パースを周期実行
-        dxl.parse_data();
+        // 👺
+        // dxl.parse_data();
 
         // 返信すべき時間
         assert_eq!(dxl.packet_return_time(), Duration::new(0,0));

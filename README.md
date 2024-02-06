@@ -1,6 +1,14 @@
 # dynamixel-f-rs
 [![Rust](https://github.com/chama1176/dynamixel-f-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/chama1176/dynamixel-f-rs/actions/workflows/rust.yml)
 
+## やりたいこと
+- parseのコードはmainループか受信割り込みで遅れ少なく呼ばれるイメージ
+- 制御ループは別でタイマ割り込みを実施する
+- parse終了のタイミングでwait usを加算して次に返すタイミングを決める
+- ほんとは受信したタイミングをbyteと一緒に管理した方がよい？
+- 基本即時返信で良いので、parseの中で最後にread bytes呼んだ時間とかでとりあえずは動きそう
+
+
 ## Class Diagram
 ```mermaid
 classDiagram
