@@ -118,7 +118,6 @@ pub struct DynamixelProtocolHandler<'a> {
     // packet_timeout: Duration,
     baudrate: u32,
     // tx_time_per_byte: u64,
-    
 }
 
 #[allow(dead_code)]
@@ -138,10 +137,16 @@ impl<'a> DynamixelProtocolHandler<'a> {
         }
     }
 
-    pub fn parse_data(&mut self) {
-
-        self.receive_packet().unwrap();
-
+    pub fn parse_data(&mut self) -> Result<(), ()> {
+        match self.receive_packet() {
+            Ok(v) => {
+                
+                return Ok(())
+            }
+            Err(_) => {
+                return Err(());
+            }
+        }
     }
 
     pub fn packet_return_time(&self) -> Duration {
@@ -150,7 +155,7 @@ impl<'a> DynamixelProtocolHandler<'a> {
 
     fn receive_packet(&mut self) -> Result<Vec<u8, MAX_PACKET_LEN>, CommunicationResult> {
         let result;
-        let mut wait_length = 11; // minimum length (HEADER0 HEADER1 HEADER2 RESERVED ID LENGTH_L LENGTH_H INST ERROR CRC16_L CRC16_H)
+        let mut wait_length = 10; // minimum length (HEADER0 HEADER1 HEADER2 RESERVED ID LENGTH_L LENGTH_H INST CRC16_L CRC16_H)
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new(); // VecDeque is not implemented in heapless.
         let mut res = Vec::<u8, MAX_PACKET_LEN>::new();
 
@@ -180,13 +185,12 @@ impl<'a> DynamixelProtocolHandler<'a> {
                 if idx == 0 {
                     // found at the beginning of the packet
                     if msg[Packet::Reserved.to_pos()] != 0x00
-                        || msg[Packet::Id.to_pos()] > 0xFC
+                        || (msg[Packet::Id.to_pos()] > 0xFC && msg[Packet::Id.to_pos()] != 0xFE)
                         || u16::from_le_bytes([
                             msg[Packet::LengthL.to_pos()],
                             msg[Packet::LengthH.to_pos()],
                         ]) as usize
                             > MAX_PACKET_LEN
-                        || msg[Packet::Instruction.to_pos()] != 0x55
                     {
                         // remove the first byte in the packet
                         for s in 0..msg.len() - 1 {
@@ -248,11 +252,15 @@ impl<'a> DynamixelProtocolHandler<'a> {
         }
     }
 
-
-
     pub fn return_packet(&self) -> Vec<u8, MAX_PACKET_LEN> {
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-        msg.extend([0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D].iter().cloned());
+        msg.extend(
+            [
+                0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D,
+            ]
+            .iter()
+            .cloned(),
+        );
         msg
     }
 
@@ -1165,7 +1173,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn ping() {
         let mut mock_uart = MockSerial::new();
@@ -1181,13 +1188,15 @@ mod tests {
         let mut dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 2, 115200);
 
         // パースを周期実行
-        // 👺
-        // dxl.parse_data();
+        assert_eq!(dxl.parse_data(), Ok(()));
 
         // 返信すべき時間
-        assert_eq!(dxl.packet_return_time(), Duration::new(0,0));
+        assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
         // 返信すべき内容
-        assert_eq!(dxl.return_packet(), [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]);
+        assert_eq!(
+            dxl.return_packet(),
+            [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]
+        );
     }
 
     #[test]
@@ -1253,7 +1262,6 @@ mod tests {
         );
     }
 
-
     // #[test]
     // fn clock() {
     //     let mut mock_uart = MockSerial::new();
@@ -1270,7 +1278,6 @@ mod tests {
     //     mock_clock.tick();
     //     assert_eq!(dxl.is_packet_timeout(), true);
     // }
-
 
     #[test]
     fn clear_port() {

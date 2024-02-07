@@ -621,7 +621,12 @@ impl ControlTableData {
     where
         F: FnOnce(&mut W) -> &mut W,
     {
-        self.value.set(f(&mut W { bits: [0; CONTROL_TABLE_SIZE] }).bits);
+        self.value.set(
+            f(&mut W {
+                bits: [0; CONTROL_TABLE_SIZE],
+            })
+            .bits,
+        );
     }
 }
 
@@ -2034,8 +2039,8 @@ impl<'a> BitsW<'a, i32> for BaseW<'a, i32> {
 
 #[cfg(test)]
 mod tests {
-    use crate::control_table::CONTROL_TABLE_SIZE;
     use crate::control_table::CustomInt;
+    use crate::control_table::CONTROL_TABLE_SIZE;
     use crate::control_table::{BitsW, ControlTable, ControlTableData, W};
 
     #[test]
@@ -2106,6 +2111,4 @@ mod tests {
         let ctd = ControlTableData::new();
         ctd.write(|w| w.indirect_address1().bits(0x2222));
     }
-
-
 }
