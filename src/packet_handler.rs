@@ -118,6 +118,8 @@ pub struct DynamixelProtocolHandler<'a> {
     // packet_timeout: Duration,
     baudrate: u32,
     // tx_time_per_byte: u64,
+    return_packet: Vec<u8, MAX_PACKET_LEN>,
+    packet_return_time: Duration,
 }
 
 #[allow(dead_code)]
@@ -134,13 +136,24 @@ impl<'a> DynamixelProtocolHandler<'a> {
             baudrate: baudrate,
             // tx_time_per_byte: ((1_000_000.0 * 8.0 + (baudrate as f32 - 1.0)) / baudrate as f32)
             //     as u64,
+            return_packet: Vec::new(),
+            packet_return_time: Duration::new(0,0),
         }
     }
 
     pub fn parse_data(&mut self) -> Result<(), ()> {
         match self.receive_packet() {
             Ok(v) => {
-                
+                // 自分のIDと異なる場合は何もしなくて良い
+                if self.id != v[Packet::Id.to_pos()] {return Ok(())};
+
+                match v[Packet::Instruction.to_pos()] {
+                    x if x == Instruction::Ping.into() => {
+                        self.return_packet = self.ping_response_packet(self.id, 0x0406, 0x26);
+                    },
+                    _ => {},
+                };
+
                 return Ok(())
             }
             Err(_) => {
@@ -150,7 +163,11 @@ impl<'a> DynamixelProtocolHandler<'a> {
     }
 
     pub fn packet_return_time(&self) -> Duration {
-        Duration::new(0, 0)
+        self.packet_return_time.clone()
+    }
+
+    pub fn return_packet(&mut self) -> Vec<u8, MAX_PACKET_LEN> {
+        self.return_packet.clone()
     }
 
     fn receive_packet(&mut self) -> Result<Vec<u8, MAX_PACKET_LEN>, CommunicationResult> {
@@ -252,20 +269,9 @@ impl<'a> DynamixelProtocolHandler<'a> {
         }
     }
 
-    pub fn return_packet(&self) -> Vec<u8, MAX_PACKET_LEN> {
-        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-        msg.extend(
-            [
-                0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D,
-            ]
-            .iter()
-            .cloned(),
-        );
-        msg
-    }
 
     pub fn reserve_msg_header(&self) -> [u8; 4] {
-        [0x00; 4] // Header and reserved len
+        [0xFF, 0xFF, 0xFD, 0x00] // Header and reserved len
     }
 
     fn add_stuffing(&mut self, msg: &mut Vec<u8, MAX_PACKET_LEN>) {
@@ -357,6 +363,25 @@ impl<'a> DynamixelProtocolHandler<'a> {
         msg[Packet::LengthL.to_pos()] = packet_length_out.to_le_bytes()[0];
         msg[Packet::LengthH.to_pos()] = packet_length_out.to_le_bytes()[1];
         msg.resize(index, 0).unwrap();
+    }
+
+
+    fn ping_response_packet(&self, id: u8, model_number: u16, firmware_version: u8) -> Vec<u8, MAX_PACKET_LEN>{
+        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+        let length: u16 = 1 + 1 + 3+ 2; // instruction + err + data + crc
+
+        msg.extend(self.reserve_msg_header().iter().cloned());
+        msg.push(id).unwrap();
+        msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
+        msg.push(Instruction::Status as u8).unwrap();
+        msg.push(0).unwrap(); // err
+        msg.extend(model_number.to_le_bytes().iter().cloned());
+        msg.extend(firmware_version.to_le_bytes().iter().cloned());
+
+        // add crc
+        msg.extend(self.calc_crc_value(&msg).to_le_bytes().iter().cloned());
+
+        msg
     }
 
     // /// Set packet without crc.
@@ -1179,13 +1204,13 @@ mod tests {
         let mock_clock = MockClock::new();
         // 受信するデータのテストケース
         // 先にテストデータをいれる
-        // ID1(XM430-W210) : Present Position(132, 0x0084, 4[byte]) = 166(0x000000A6)
+        // Ping Instruction Packet ID : 1
         let instruction = [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x03, 0x00, 0x01, 0x19, 0x4E];
         for data in instruction {
             mock_uart.tx_buf.push_back(data).unwrap();
         }
 
-        let mut dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 2, 115200);
+        let mut dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 1, 115200);
 
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
@@ -1193,6 +1218,7 @@ mod tests {
         // 返信すべき時間
         assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
         // 返信すべき内容
+        // ID1(XM430-W210) : For Model Number 1030(0x0406), Version of Firmware 38(0x26)
         assert_eq!(
             dxl.return_packet(),
             [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]
