@@ -12,6 +12,7 @@ pub mod utils;
 
 pub use control_data::*;
 pub use control_table::ControlTable;
+pub use control_table::ControlTableData;
 use instruction::Instruction;
 pub use packet_handler::CommunicationResult;
 pub use packet_handler::DynamixelProtocolHandler;

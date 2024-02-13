@@ -1,7 +1,10 @@
+use crate::control_table;
 use crate::Clock;
 use crate::ControlTable;
+use crate::ControlTableData;
 use crate::Instruction;
 use crate::Interface;
+
 use core::fmt;
 use core::result::Result;
 use core::time::Duration;
@@ -111,7 +114,6 @@ impl fmt::Display for CommunicationResult {
 pub struct DynamixelProtocolHandler<'a> {
     uart: &'a mut dyn Interface,
     clock: &'a dyn Clock,
-    id: u8,
     // is_enabled: bool,
     is_using: bool,
     // packet_start_time: Duration,
@@ -120,15 +122,20 @@ pub struct DynamixelProtocolHandler<'a> {
     // tx_time_per_byte: u64,
     return_packet: Vec<u8, MAX_PACKET_LEN>,
     packet_return_time: Duration,
+    ctd: &'a ControlTableData,
 }
 
 #[allow(dead_code)]
 impl<'a> DynamixelProtocolHandler<'a> {
-    pub fn new(uart: &'a mut dyn Interface, clock: &'a dyn Clock, id: u8, baudrate: u32) -> Self {
+    pub fn new(
+        uart: &'a mut dyn Interface,
+        clock: &'a dyn Clock,
+        baudrate: u32,
+        control_table_data: &'a ControlTableData,
+    ) -> Self {
         Self {
             uart,
             clock,
-            id,
             // is_enabled: false,
             is_using: false,
             // packet_start_time: Duration::new(0, 0),
@@ -137,7 +144,8 @@ impl<'a> DynamixelProtocolHandler<'a> {
             // tx_time_per_byte: ((1_000_000.0 * 8.0 + (baudrate as f32 - 1.0)) / baudrate as f32)
             //     as u64,
             return_packet: Vec::new(),
-            packet_return_time: Duration::new(0,0),
+            packet_return_time: Duration::new(0, 0),
+            ctd: control_table_data,
         }
     }
 
@@ -145,16 +153,22 @@ impl<'a> DynamixelProtocolHandler<'a> {
         match self.receive_packet() {
             Ok(v) => {
                 // 自分のIDと異なる場合は何もしなくて良い
-                if self.id != v[Packet::Id.to_pos()] {return Ok(())};
+                if self.ctd.read().id() != v[Packet::Id.to_pos()] {
+                    return Ok(());
+                };
 
                 match v[Packet::Instruction.to_pos()] {
                     x if x == Instruction::Ping.into() => {
-                        self.return_packet = self.ping_response_packet(self.id, 0x0406, 0x26);
-                    },
-                    _ => {},
+                        self.return_packet = self.ping_response_packet(
+                            self.ctd.read().id(),
+                            self.ctd.read().model_number(),
+                            self.ctd.read().firmware_version(),
+                        );
+                    }
+                    _ => {}
                 };
 
-                return Ok(())
+                return Ok(());
             }
             Err(_) => {
                 return Err(());
@@ -269,7 +283,6 @@ impl<'a> DynamixelProtocolHandler<'a> {
         }
     }
 
-
     pub fn reserve_msg_header(&self) -> [u8; 4] {
         [0xFF, 0xFF, 0xFD, 0x00] // Header and reserved len
     }
@@ -365,10 +378,14 @@ impl<'a> DynamixelProtocolHandler<'a> {
         msg.resize(index, 0).unwrap();
     }
 
-
-    fn ping_response_packet(&self, id: u8, model_number: u16, firmware_version: u8) -> Vec<u8, MAX_PACKET_LEN>{
+    fn ping_response_packet(
+        &self,
+        id: u8,
+        model_number: u16,
+        firmware_version: u8,
+    ) -> Vec<u8, MAX_PACKET_LEN> {
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-        let length: u16 = 1 + 1 + 3+ 2; // instruction + err + data + crc
+        let length: u16 = 1 + 1 + 3 + 2; // instruction + err + data + crc
 
         msg.extend(self.reserve_msg_header().iter().cloned());
         msg.push(id).unwrap();
@@ -1131,8 +1148,11 @@ impl<'a> DynamixelProtocolHandler<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::control_table;
+    use crate::control_table::BitsW;
     use crate::packet_handler::MAX_PACKET_LEN;
     use crate::ControlTable;
+    use crate::ControlTableData;
     use crate::DynamixelProtocolHandler;
     use crate::Instruction;
     use core::cell::RefCell;
@@ -1202,6 +1222,10 @@ mod tests {
     fn ping() {
         let mut mock_uart = MockSerial::new();
         let mock_clock = MockClock::new();
+        let control_table_data = ControlTableData::new();
+        control_table_data.modify(|_, w| w.model_number().bits(0x0406));
+        control_table_data.modify(|_, w| w.firmware_version().bits(0x26));
+        control_table_data.modify(|_,w|w.id().bits(1));
         // 受信するデータのテストケース
         // 先にテストデータをいれる
         // Ping Instruction Packet ID : 1
@@ -1210,7 +1234,12 @@ mod tests {
             mock_uart.tx_buf.push_back(data).unwrap();
         }
 
-        let mut dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 1, 115200);
+        let mut dxl = DynamixelProtocolHandler::new(
+            &mut mock_uart,
+            &mock_clock,
+            115200,
+            &control_table_data,
+        );
 
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
@@ -1229,7 +1258,14 @@ mod tests {
     fn crc() {
         let mut mock_uart = MockSerial::new();
         let mock_clock = MockClock::new();
-        let dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 2, 115200);
+        let control_table_data = ControlTableData::new();
+
+        let dxl = DynamixelProtocolHandler::new(
+            &mut mock_uart,
+            &mock_clock,
+            115200,
+            &control_table_data,
+        );
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
         msg.extend(
             [
@@ -1260,7 +1296,14 @@ mod tests {
     fn stuffing() {
         let mut mock_uart = MockSerial::new();
         let mock_clock = MockClock::new();
-        let mut dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 2, 115200);
+        let control_table_data = ControlTableData::new();
+
+        let mut dxl = DynamixelProtocolHandler::new(
+            &mut mock_uart,
+            &mock_clock,
+            115200,
+            &control_table_data,
+        );
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
         msg.extend(
             [
@@ -1308,11 +1351,18 @@ mod tests {
     #[test]
     fn clear_port() {
         let mut mock_uart = MockSerial::new();
+        let control_table_data = ControlTableData::new();
+
         mock_uart.tx_buf.push_back(1).unwrap();
         mock_uart.tx_buf.push_back(2).unwrap();
         mock_uart.tx_buf.push_back(3).unwrap();
         let mock_clock = MockClock::new();
-        let mut dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 1, 115200);
+        let mut dxl = DynamixelProtocolHandler::new(
+            &mut mock_uart,
+            &mock_clock,
+            115200,
+            &control_table_data,
+        );
         dxl.clear_port();
         assert_eq!(mock_uart.tx_buf.is_empty(), true);
     }
