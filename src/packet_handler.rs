@@ -1255,6 +1255,42 @@ mod tests {
     }
 
     #[test]
+    fn read() {
+        let mut mock_uart = MockSerial::new();
+        let mock_clock = MockClock::new();
+        let control_table_data = ControlTableData::new();
+        control_table_data.modify(|_, w| w.model_number().bits(0x0406));
+        control_table_data.modify(|_, w| w.firmware_version().bits(0x26));
+        control_table_data.modify(|_,w|w.id().bits(1));
+        // 受信するデータのテストケース
+        // 先にテストデータをいれる
+        // Read Instruction Packet ID: 1, Present Position(132, 0x0084, 4[byte])
+        let instruction = [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x02, 0x84, 0x00, 0x04, 0x00, 0x1D, 0x15];
+        for data in instruction {
+            mock_uart.tx_buf.push_back(data).unwrap();
+        }
+
+        let mut dxl = DynamixelProtocolHandler::new(
+            &mut mock_uart,
+            &mock_clock,
+            115200,
+            &control_table_data,
+        );
+
+        // パースを周期実行
+        assert_eq!(dxl.parse_data(), Ok(()));
+
+        // 返信すべき時間
+        assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
+        // 返信すべき内容
+        // ID1(XM430-W210) : Present Position(132, 0x0084, 4[byte]) = 166(0x000000A6)
+        assert_eq!(
+            dxl.return_packet(),
+            [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x00, 0x55, 0x00, 0xA6, 0x00, 0x00, 0x00, 0x8C, 0xC0]
+        );
+    }
+
+    #[test]
     fn crc() {
         let mut mock_uart = MockSerial::new();
         let mock_clock = MockClock::new();
