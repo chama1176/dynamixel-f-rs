@@ -165,6 +165,20 @@ impl<'a> DynamixelProtocolHandler<'a> {
                             self.ctd.read().firmware_version(),
                         );
                     }
+                    x if x == Instruction::Read.into() => {
+                        let address = u16::from_le_bytes([
+                            v[Packet::Parameter0.to_pos()],
+                            v[Packet::Parameter0.to_pos() + 1],
+                        ]) as usize;
+                        let length = u16::from_le_bytes([
+                            v[Packet::Parameter0.to_pos() + 2],
+                            v[Packet::Parameter0.to_pos() + 3],
+                        ]) as usize;
+                        self.return_packet = self.read_response_packet(
+                            self.ctd.read().id(),
+                            &self.ctd.read().bits()[address..address + length],
+                        );
+                    }
                     _ => {}
                 };
 
@@ -385,7 +399,7 @@ impl<'a> DynamixelProtocolHandler<'a> {
         firmware_version: u8,
     ) -> Vec<u8, MAX_PACKET_LEN> {
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-        let length: u16 = 1 + 1 + 3 + 2; // instruction + err + data + crc
+        let length: u16 = 1 + 1 + 3 + 2; // instruction + err + data(3) + crc(2)
 
         msg.extend(self.reserve_msg_header().iter().cloned());
         msg.push(id).unwrap();
@@ -394,6 +408,23 @@ impl<'a> DynamixelProtocolHandler<'a> {
         msg.push(0).unwrap(); // err
         msg.extend(model_number.to_le_bytes().iter().cloned());
         msg.extend(firmware_version.to_le_bytes().iter().cloned());
+
+        // add crc
+        msg.extend(self.calc_crc_value(&msg).to_le_bytes().iter().cloned());
+
+        msg
+    }
+
+    fn read_response_packet(&self, id: u8, data: &[u8]) -> Vec<u8, MAX_PACKET_LEN> {
+        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+        let length: u16 = 1 + 1 + 4 + 2; // instruction + err + data + crc(2)
+
+        msg.extend(self.reserve_msg_header().iter().cloned());
+        msg.push(id).unwrap();
+        msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
+        msg.push(Instruction::Status as u8).unwrap();
+        msg.push(0).unwrap(); // err
+        msg.extend(data.iter().cloned());
 
         // add crc
         msg.extend(self.calc_crc_value(&msg).to_le_bytes().iter().cloned());
@@ -1225,7 +1256,7 @@ mod tests {
         let control_table_data = ControlTableData::new();
         control_table_data.modify(|_, w| w.model_number().bits(0x0406));
         control_table_data.modify(|_, w| w.firmware_version().bits(0x26));
-        control_table_data.modify(|_,w|w.id().bits(1));
+        control_table_data.modify(|_, w| w.id().bits(1));
         // 受信するデータのテストケース
         // 先にテストデータをいれる
         // Ping Instruction Packet ID : 1
@@ -1234,12 +1265,8 @@ mod tests {
             mock_uart.tx_buf.push_back(data).unwrap();
         }
 
-        let mut dxl = DynamixelProtocolHandler::new(
-            &mut mock_uart,
-            &mock_clock,
-            115200,
-            &control_table_data,
-        );
+        let mut dxl =
+            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
 
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
@@ -1261,21 +1288,20 @@ mod tests {
         let control_table_data = ControlTableData::new();
         control_table_data.modify(|_, w| w.model_number().bits(0x0406));
         control_table_data.modify(|_, w| w.firmware_version().bits(0x26));
-        control_table_data.modify(|_,w|w.id().bits(1));
+        control_table_data.modify(|_, w| w.id().bits(1));
+        control_table_data.modify(|_, w| w.present_position().bits(166));
         // 受信するデータのテストケース
         // 先にテストデータをいれる
         // Read Instruction Packet ID: 1, Present Position(132, 0x0084, 4[byte])
-        let instruction = [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x02, 0x84, 0x00, 0x04, 0x00, 0x1D, 0x15];
+        let instruction = [
+            0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x02, 0x84, 0x00, 0x04, 0x00, 0x1D, 0x15,
+        ];
         for data in instruction {
             mock_uart.tx_buf.push_back(data).unwrap();
         }
 
-        let mut dxl = DynamixelProtocolHandler::new(
-            &mut mock_uart,
-            &mock_clock,
-            115200,
-            &control_table_data,
-        );
+        let mut dxl =
+            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
 
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
@@ -1286,7 +1312,10 @@ mod tests {
         // ID1(XM430-W210) : Present Position(132, 0x0084, 4[byte]) = 166(0x000000A6)
         assert_eq!(
             dxl.return_packet(),
-            [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x00, 0x55, 0x00, 0xA6, 0x00, 0x00, 0x00, 0x8C, 0xC0]
+            [
+                0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x00, 0x55, 0x00, 0xA6, 0x00, 0x00, 0x00, 0x8C,
+                0xC0
+            ]
         );
     }
 
@@ -1296,12 +1325,8 @@ mod tests {
         let mock_clock = MockClock::new();
         let control_table_data = ControlTableData::new();
 
-        let dxl = DynamixelProtocolHandler::new(
-            &mut mock_uart,
-            &mock_clock,
-            115200,
-            &control_table_data,
-        );
+        let dxl =
+            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
         msg.extend(
             [
@@ -1334,12 +1359,8 @@ mod tests {
         let mock_clock = MockClock::new();
         let control_table_data = ControlTableData::new();
 
-        let mut dxl = DynamixelProtocolHandler::new(
-            &mut mock_uart,
-            &mock_clock,
-            115200,
-            &control_table_data,
-        );
+        let mut dxl =
+            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
         msg.extend(
             [
@@ -1393,12 +1414,8 @@ mod tests {
         mock_uart.tx_buf.push_back(2).unwrap();
         mock_uart.tx_buf.push_back(3).unwrap();
         let mock_clock = MockClock::new();
-        let mut dxl = DynamixelProtocolHandler::new(
-            &mut mock_uart,
-            &mock_clock,
-            115200,
-            &control_table_data,
-        );
+        let mut dxl =
+            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
         dxl.clear_port();
         assert_eq!(mock_uart.tx_buf.is_empty(), true);
     }
