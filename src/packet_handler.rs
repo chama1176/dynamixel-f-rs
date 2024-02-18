@@ -179,6 +179,27 @@ impl<'a> DynamixelProtocolHandler<'a> {
                             &self.ctd.read().bits()[address..address + length],
                         );
                     }
+                    x if x == Instruction::Write.into() => {
+                        let address = u16::from_le_bytes([
+                            v[Packet::Parameter0.to_pos()],
+                            v[Packet::Parameter0.to_pos() + 1],
+                        ]) as usize;
+                        let data_len = u16::from_le_bytes([
+                            v[Packet::LengthL.to_pos()],
+                            v[Packet::LengthH.to_pos()],
+                        ]) as usize
+                            - 5;
+                        self.ctd.modify(|_, w| {
+                            w.bytes(
+                                address,
+                                &v[(Packet::Parameter0.to_pos() + 2)
+                                    ..(Packet::Parameter0.to_pos() + 2 + data_len)],
+                            )
+                        });
+                        self.return_packet = self.write_response_packet(
+                            self.ctd.read().id(),
+                        );
+                    }
                     _ => {}
                 };
 
@@ -431,6 +452,23 @@ impl<'a> DynamixelProtocolHandler<'a> {
 
         msg
     }
+
+    fn write_response_packet(&self, id: u8) -> Vec<u8, MAX_PACKET_LEN> {
+        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
+        let length: u16 = 1 + 1 + 2; // instruction + err + crc(2)
+
+        msg.extend(self.reserve_msg_header().iter().cloned());
+        msg.push(id).unwrap();
+        msg.extend(length.to_le_bytes().iter().cloned()); // Set length temporary
+        msg.push(Instruction::Status as u8).unwrap();
+        msg.push(0).unwrap(); // err
+
+        // add crc
+        msg.extend(self.calc_crc_value(&msg).to_le_bytes().iter().cloned());
+
+        msg
+    }
+
 
     // /// Set packet without crc.
     // pub fn send_packet(
@@ -1317,6 +1355,40 @@ mod tests {
                 0xC0
             ]
         );
+    }
+
+    #[test]
+    fn write() {
+        let mut mock_uart = MockSerial::new();
+        let mock_clock = MockClock::new();
+        let control_table_data = ControlTableData::new();
+        control_table_data.modify(|_, w| w.id().bits(1));
+        // 受信するデータのテストケース
+        // 先にテストデータをいれる
+        // ID1(XM430-W210) : Write 512(0x00000200) to Goal Position(116, 0x0074, 4[byte])
+        let instruction = [
+            0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x09, 0x00, 0x03, 0x74, 0x00, 0x00, 0x02, 0x00, 0x00,
+            0xCA, 0x89,
+        ];
+        for data in instruction {
+            mock_uart.tx_buf.push_back(data).unwrap();
+        }
+
+        let mut dxl =
+            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
+
+        // パースを周期実行
+        assert_eq!(dxl.parse_data(), Ok(()));
+
+        // 返信すべき時間
+        assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
+        // 返信すべき内容
+        assert_eq!(
+            dxl.return_packet(),
+            [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x55, 0x00, 0xA1, 0x0C,]
+        );
+        // control table dataが更新されていること
+        assert_eq!(control_table_data.read().goal_position(), 512);
     }
 
     #[test]

@@ -1134,6 +1134,15 @@ impl W {
         self.bits = bits;
         self
     }
+    pub fn bytes(&mut self, address: usize, bytes: &[u8]) -> &mut Self {
+        for i in 0..bytes.len() {
+            if address + i >= self.bits.len() {
+                break;
+            }
+            self.bits[address + i] = bytes[i].clone();
+        }
+        self
+    }
     pub fn model_number(
         &mut self,
     ) -> BaseW<<() as CustomInt<{ ControlTable::ModelNumber as usize }>>::Ty> {
@@ -2104,6 +2113,17 @@ mod tests {
         assert_eq!(ctd.read().model_number(), 0x4321);
         ctd.modify(|_, w| w.id().bits(2));
         assert_eq!(ctd.read().bits()[0..9], [0x21, 0x43, 0, 0, 0, 0, 0, 2, 0]);
+        ctd.modify(|r, w| {
+            w.bits((|| {
+                let mut c = r.bits();
+                c[5] = 1;
+                c[6] = 3;
+                c
+            })())
+        });
+        assert_eq!(ctd.read().bits()[0..9], [0x21, 0x43, 0, 0, 0, 1, 3, 2, 0]);
+        ctd.modify(|_, w| w.bytes(4, &[1, 2]));
+        assert_eq!(ctd.read().bits()[0..9], [0x21, 0x43, 0, 0, 1, 2, 3, 2, 0]);
     }
 
     #[test]
