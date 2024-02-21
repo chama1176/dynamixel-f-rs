@@ -152,8 +152,10 @@ impl<'a> DynamixelProtocolHandler<'a> {
     pub fn parse_data(&mut self) -> Result<(), ()> {
         match self.receive_packet() {
             Ok(v) => {
-                // 自分のIDと異なる場合は何もしなくて良い
-                if self.ctd.read().id() != v[Packet::Id.to_pos()] {
+                // ブロードキャストではなく、自分のIDと異なる場合は何もしなくて良い
+                if v[Packet::Id.to_pos()] != BROADCAST_ID
+                    && v[Packet::Id.to_pos()] != self.ctd.read().id()
+                {
                     return Ok(());
                 };
 
@@ -196,9 +198,52 @@ impl<'a> DynamixelProtocolHandler<'a> {
                                     ..(Packet::Parameter0.to_pos() + 2 + data_len)],
                             )
                         });
-                        self.return_packet = self.write_response_packet(
+                        self.return_packet = self.write_response_packet(self.ctd.read().id());
+                    }
+                    x if x == Instruction::SyncRead.into() => {
+                        let id_len = u16::from_le_bytes([
+                            v[Packet::LengthL.to_pos()],
+                            v[Packet::LengthH.to_pos()],
+                        ]) as usize
+                            - 7; // 7 = instruction + address(2) + read_length(2) + crc(2)
+                        let address = u16::from_le_bytes([
+                            v[Packet::Parameter0.to_pos()],
+                            v[Packet::Parameter0.to_pos() + 1],
+                        ]) as usize;
+                        let length = u16::from_le_bytes([
+                            v[Packet::Parameter0.to_pos() + 2],
+                            v[Packet::Parameter0.to_pos() + 3],
+                        ]) as usize;
+                        // 👺idの中で自分が何番目か確認する
+                        self.return_packet = self.read_response_packet(
                             self.ctd.read().id(),
+                            &self.ctd.read().bits()[address..address + length],
                         );
+                    }
+                    x if x == Instruction::SyncWrite.into() => {
+                        let address = u16::from_le_bytes([
+                            v[Packet::Parameter0.to_pos()],
+                            v[Packet::Parameter0.to_pos() + 1],
+                        ]) as usize;
+                        let length = u16::from_le_bytes([
+                            v[Packet::Parameter0.to_pos() + 2],
+                            v[Packet::Parameter0.to_pos() + 3],
+                        ]) as usize;
+                        let id_len = (u16::from_le_bytes([
+                            v[Packet::LengthL.to_pos()],
+                            v[Packet::LengthH.to_pos()],
+                        ]) as usize
+                            - 7)
+                            / (length + 1);
+                        // 7 = instruction + address(2) + read_length(2) + crc(2)
+                        for i in 0..id_len {
+                            let id_pos = Packet::Parameter0.to_pos() + 4 + i * (length + 1);
+                            if v[id_pos] == self.ctd.read().id() {
+                                self.ctd.modify(|_, w| {
+                                    w.bytes(address, &v[(id_pos + 1)..(id_pos + 1 + length)])
+                                });
+                            }
+                        }
                     }
                     _ => {}
                 };
@@ -468,7 +513,6 @@ impl<'a> DynamixelProtocolHandler<'a> {
 
         msg
     }
-
 
     // /// Set packet without crc.
     // pub fn send_packet(
@@ -1389,6 +1433,117 @@ mod tests {
         );
         // control table dataが更新されていること
         assert_eq!(control_table_data.read().goal_position(), 512);
+    }
+
+    #[test]
+    fn sync_read() {
+        let mut mock_uart1 = MockSerial::new();
+        let mut mock_uart2 = MockSerial::new();
+        let mock_clock = MockClock::new();
+        let control_table_data1 = ControlTableData::new();
+        control_table_data1.modify(|_, w| w.id().bits(1));
+        control_table_data1.modify(|_, w| w.present_position().bits(166));
+        let control_table_data2 = ControlTableData::new();
+        control_table_data2.modify(|_, w| w.id().bits(2));
+        control_table_data2.modify(|_, w| w.present_position().bits(2079));
+        // 受信するデータのテストケース
+        // 先にテストデータをいれる
+        // ID1(XM430-W210) : Present Position(132, 0x0084, 4[byte]) = 166(0x000000A6)
+        // ID2(XM430-W210) : Present Position(132, 0x0084, 4[byte]) = 2,079(0x0000081F)
+        let instruction = [
+            0xFF, 0xFF, 0xFD, 0x00, 0xFE, 0x09, 0x00, 0x82, 0x84, 0x00, 0x04, 0x00, 0x01, 0x02,
+            0xCE, 0xFA,
+        ];
+        for data in instruction {
+            mock_uart1.tx_buf.push_back(data).unwrap();
+            mock_uart2.tx_buf.push_back(data).unwrap();
+        }
+
+        let mut dxl1 = DynamixelProtocolHandler::new(
+            &mut mock_uart1,
+            &mock_clock,
+            115200,
+            &control_table_data1,
+        );
+        let mut dxl2 = DynamixelProtocolHandler::new(
+            &mut mock_uart2,
+            &mock_clock,
+            115200,
+            &control_table_data2,
+        );
+
+        // パースを周期実行
+        assert_eq!(dxl1.parse_data(), Ok(()));
+        assert_eq!(dxl2.parse_data(), Ok(()));
+
+        // 返信すべき時間
+        assert_eq!(dxl1.packet_return_time(), Duration::new(0, 0));
+        assert_eq!(dxl2.packet_return_time(), Duration::new(0, 0));
+        // 返信すべき内容
+        assert_eq!(
+            dxl1.return_packet(),
+            [
+                0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x00, 0x55, 0x00, 0xA6, 0x00, 0x00, 0x00, 0x8C,
+                0xC0
+            ]
+        );
+        assert_eq!(
+            dxl2.return_packet(),
+            [
+                0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x08, 0x00, 0x55, 0x00, 0x1F, 0x08, 0x00, 0x00, 0xBA,
+                0xBE
+            ]
+        );
+    }
+
+    #[test]
+    fn sync_write() {
+        let mut mock_uart1 = MockSerial::new();
+        let mut mock_uart2 = MockSerial::new();
+        let mock_clock = MockClock::new();
+        let control_table_data1 = ControlTableData::new();
+        control_table_data1.modify(|_, w| w.id().bits(1));
+        let control_table_data2 = ControlTableData::new();
+        control_table_data2.modify(|_, w| w.id().bits(2));
+        // 受信するデータのテストケース
+        // 先にテストデータをいれる
+        // ID1(XM430-W210) : Write 150(0x00000096) to Goal Position(116, 0x0074, 4[byte])
+        // ID2(XM430-W210) : Write 170(0x000000AA) to Goal Position(116, 0x0074, 4[byte])
+        let instruction = [
+            0xFF, 0xFF, 0xFD, 0x00, 0xFE, 0x11, 0x00, 0x83, 0x74, 0x00, 0x04, 0x00, 0x01, 0x96,
+            0x00, 0x00, 0x00, 0x02, 0xAA, 0x00, 0x00, 0x00, 0x82, 0x87,
+        ];
+        for data in instruction {
+            mock_uart1.tx_buf.push_back(data).unwrap();
+            mock_uart2.tx_buf.push_back(data).unwrap();
+        }
+
+        let mut dxl1 = DynamixelProtocolHandler::new(
+            &mut mock_uart1,
+            &mock_clock,
+            115200,
+            &control_table_data1,
+        );
+        let mut dxl2 = DynamixelProtocolHandler::new(
+            &mut mock_uart2,
+            &mock_clock,
+            115200,
+            &control_table_data2,
+        );
+
+        // パースを周期実行
+        assert_eq!(dxl1.parse_data(), Ok(()));
+        assert_eq!(dxl2.parse_data(), Ok(()));
+
+        // 返信すべき時間
+        assert_eq!(dxl1.packet_return_time(), Duration::new(0, 0));
+        assert_eq!(dxl2.packet_return_time(), Duration::new(0, 0));
+        // 返信すべき内容はない
+        assert_eq!(dxl1.return_packet(), []);
+        assert_eq!(dxl2.return_packet(), []);
+        // control table dataが更新されていること
+        assert_eq!(control_table_data1.read().goal_position(), 150);
+        assert_eq!(control_table_data2.read().goal_position(), 170);
     }
 
     #[test]
