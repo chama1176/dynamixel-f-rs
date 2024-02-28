@@ -150,7 +150,8 @@ impl<'a> DynamixelProtocolHandler<'a> {
     }
 
     pub fn parse_data(&mut self) -> Result<(), ()> {
-        match self.receive_packet() {
+        // masterからの指令待ちはタイムアウト不要
+        match self.receive_packet(Duration::new(0, 0)) {
             Ok(v) => {
                 // ブロードキャストではなく、自分のIDと異なる場合は何もしなくて良い
                 if v[Packet::Id.to_pos()] != BROADCAST_ID
@@ -166,6 +167,29 @@ impl<'a> DynamixelProtocolHandler<'a> {
                             self.ctd.read().model_number(),
                             self.ctd.read().firmware_version(),
                         );
+                        // 他のサーボ待ち
+                        for _ in 1..self.ctd.read().id() {
+                            // pingの結果の長さは us
+                            // 14byte * 8 / baudrate * 1e6
+                            // return delayは最大で500us?
+                            let wait_us = 14 * 8 * 1_000_000/ self.baudrate + 500;
+                            match self.receive_packet(Duration::from_micros(wait_us.into())) {
+                                Ok(ov) => {
+                                    if ov[Packet::Id.to_pos()] == self.ctd.read().id()-1 {
+                                        // 1つ前のidまで来ていればreturnする
+                                        break;
+                                    }
+                                }
+                                Err(_) => {}
+                            }
+                        } 
+                        if self.ctd.read().return_delay_time() > 0 {
+                            // 待ちなし
+                        } else {
+                            // waitが必要
+                        }
+                        // 送信
+                        self.uart.write_bytes(&self.return_packet);
                     }
                     x if x == Instruction::Read.into() => {
                         let address = u16::from_le_bytes([
@@ -180,6 +204,14 @@ impl<'a> DynamixelProtocolHandler<'a> {
                             self.ctd.read().id(),
                             &self.ctd.read().bits()[address..address + length],
                         );
+                        // 他のサーボ待ちは不要
+                        if self.ctd.read().return_delay_time() > 0 {
+                            // 待ちなし
+                        } else {
+                            // waitが必要
+                        }
+                        // 送信
+                        self.uart.write_bytes(&self.return_packet);
                     }
                     x if x == Instruction::Write.into() => {
                         let address = u16::from_le_bytes([
@@ -199,6 +231,14 @@ impl<'a> DynamixelProtocolHandler<'a> {
                             )
                         });
                         self.return_packet = self.write_response_packet(self.ctd.read().id());
+                        // 他のサーボ待ちは不要
+                        if self.ctd.read().return_delay_time() > 0 {
+                            // 待ちなし
+                        } else {
+                            // waitが必要
+                        }
+                        // 送信
+                        self.uart.write_bytes(&self.return_packet);
                     }
                     x if x == Instruction::SyncRead.into() => {
                         let id_len = u16::from_le_bytes([
@@ -264,7 +304,10 @@ impl<'a> DynamixelProtocolHandler<'a> {
         self.return_packet.clone()
     }
 
-    fn receive_packet(&mut self) -> Result<Vec<u8, MAX_PACKET_LEN>, CommunicationResult> {
+    fn receive_packet(
+        &mut self,
+        timeout: Duration,
+    ) -> Result<Vec<u8, MAX_PACKET_LEN>, CommunicationResult> {
         let result;
         let mut wait_length = 10; // minimum length (HEADER0 HEADER1 HEADER2 RESERVED ID LENGTH_L LENGTH_H INST CRC16_L CRC16_H)
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new(); // VecDeque is not implemented in heapless.
@@ -328,7 +371,15 @@ impl<'a> DynamixelProtocolHandler<'a> {
                         continue;
                     }
 
-                    // slave does not have to check timeout
+                    if msg.len() < wait_length {
+                        // check timeout
+                        if !timeout.is_zero() && self.clock.get_current_time() > timeout {
+                            result = CommunicationResult::RxTimeout;
+                            break;
+                        } else {
+                            continue;
+                        }
+                    }
 
                     // verify CRC16
                     let crc = u16::from_le_bytes([msg[msg.len() - 2], msg[msg.len() - 1]]);
@@ -346,7 +397,11 @@ impl<'a> DynamixelProtocolHandler<'a> {
                     msg.truncate(msg.len() - idx);
                 }
             } else {
-                // slave does not have to check timeout
+                // check timeout
+                if !timeout.is_zero() && self.clock.get_current_time() > timeout {
+                    result = CommunicationResult::RxTimeout;
+                    break;
+                }
             }
             // usleep(0);
         }
@@ -514,7 +569,6 @@ impl<'a> DynamixelProtocolHandler<'a> {
         msg
     }
 
-
     fn calc_crc_value(&self, msg: &[u8]) -> u16 {
         let crc_table = [
             0x0000, 0x8005, 0x800F, 0x000A, 0x801B, 0x001E, 0x0014, 0x8011, 0x8033, 0x0036, 0x003C,
@@ -666,6 +720,44 @@ mod tests {
         assert_eq!(
             dxl.return_packet(),
             [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]
+        );
+    }
+
+    #[test]
+    fn ping_broadcast() {
+        let mut mock_uart = MockSerial::new();
+        let mock_clock = MockClock::new();
+        let control_table_data = ControlTableData::new();
+        control_table_data.modify(|_, w| w.model_number().bits(0x0406));
+        control_table_data.modify(|_, w| w.firmware_version().bits(0x26));
+        control_table_data.modify(|_, w| w.id().bits(2));
+        // 受信するデータのテストケース
+        // 先にテストデータをいれる
+        // Ping Instruction Packet ID : 254(Broadcast ID)
+        let instruction = [0xFF, 0xFF, 0xFD, 0x00, 0xFE, 0x03, 0x00, 0x01, 0x31, 0x42];
+        for data in instruction {
+            mock_uart.tx_buf.push_back(data).unwrap();
+        }
+        // id1が存在する場合をテスト
+        // id1が存在する場合のテストが必要だがmock_clockの工夫が必要👺
+        let id1_response = [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D];
+        for data in id1_response {
+            mock_uart.tx_buf.push_back(data).unwrap();
+        }
+
+        let mut dxl =
+            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
+
+        // パースを周期実行
+        assert_eq!(dxl.parse_data(), Ok(()));
+
+        // 返信すべき時間
+        assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
+        // 返信すべき内容
+        // ID1(XM430-W210) : For Model Number 1030(0x0406), Version of Firmware 38(0x26)
+        assert_eq!(
+            dxl.return_packet(),
+            [0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x6F, 0x6D]
         );
     }
 
