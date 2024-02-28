@@ -169,20 +169,21 @@ impl<'a> DynamixelProtocolHandler<'a> {
                         );
                         // 他のサーボ待ち
                         for _ in 1..self.ctd.read().id() {
-                            // pingの結果の長さは us
-                            // 14byte * 8 / baudrate * 1e6
+                            // x byte * 8 / baudrate * 1e6
                             // return delayは最大で500us?
-                            let wait_us = 14 * 8 * 1_000_000/ self.baudrate + 500;
+                            let wait_us = self.return_packet.len() as u32 * 8 * 1_000_000
+                                / self.baudrate
+                                + 500;
                             match self.receive_packet(Duration::from_micros(wait_us.into())) {
                                 Ok(ov) => {
-                                    if ov[Packet::Id.to_pos()] == self.ctd.read().id()-1 {
-                                        // 1つ前のidまで来ていればreturnする
+                                    if ov[Packet::Id.to_pos()] == self.ctd.read().id() - 1 {
+                                        // 1つ前のidまで来ていれば抜ける
                                         break;
                                     }
                                 }
                                 Err(_) => {}
                             }
-                        } 
+                        }
                         if self.ctd.read().return_delay_time() > 0 {
                             // 待ちなし
                         } else {
@@ -254,11 +255,35 @@ impl<'a> DynamixelProtocolHandler<'a> {
                             v[Packet::Parameter0.to_pos() + 2],
                             v[Packet::Parameter0.to_pos() + 3],
                         ]) as usize;
-                        // 👺idの中で自分が何番目か確認する
                         self.return_packet = self.read_response_packet(
                             self.ctd.read().id(),
                             &self.ctd.read().bits()[address..address + length],
                         );
+                        // 他のサーボ待ち
+                        for i in 0..id_len {
+                            if v[Packet::Parameter0.to_pos() + 4 + i] == self.ctd.read().id() {
+                                // 自分が返す番だったら抜ける
+                                break;
+                            }
+                            // x byte * 8 / baudrate * 1e6
+                            // return delayは最大で500us?
+                            let wait_us = self.return_packet.len() as u32 * 8 * 1_000_000
+                                / self.baudrate
+                                + 500;
+                            match self.receive_packet(Duration::from_micros(wait_us.into())) {
+                                Ok(_) => {
+                                    // 中身は確認しない
+                                }
+                                Err(_) => {}
+                            }
+                        }
+                        if self.ctd.read().return_delay_time() > 0 {
+                            // 待ちなし
+                        } else {
+                            // waitが必要
+                        }
+                        // 送信
+                        self.uart.write_bytes(&self.return_packet);
                     }
                     x if x == Instruction::SyncWrite.into() => {
                         let address = u16::from_le_bytes([
@@ -740,7 +765,9 @@ mod tests {
         }
         // id1が存在する場合をテスト
         // id1が存在する場合のテストが必要だがmock_clockの工夫が必要👺
-        let id1_response = [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D];
+        let id1_response = [
+            0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D,
+        ];
         for data in id1_response {
             mock_uart.tx_buf.push_back(data).unwrap();
         }
@@ -854,6 +881,14 @@ mod tests {
         ];
         for data in instruction {
             mock_uart1.tx_buf.push_back(data).unwrap();
+            mock_uart2.tx_buf.push_back(data).unwrap();
+        }
+        let id1_response = [
+            0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x00, 0x55, 0x00, 0xA6, 0x00, 0x00, 0x00, 0x8C,
+            0xC0,
+        ];
+        // id2の方にはid1のresponseを入れておく
+        for data in id1_response {
             mock_uart2.tx_buf.push_back(data).unwrap();
         }
 
