@@ -185,7 +185,7 @@ impl<'a> DynamixelProtocolHandler<'a> {
                             }
                         }
                         if self.ctd.read().return_delay_time() > 0 {
-                            // 待ちなし
+                            // 追加待ちなし
                         } else {
                             // waitが必要
                         }
@@ -207,7 +207,7 @@ impl<'a> DynamixelProtocolHandler<'a> {
                         );
                         // 他のサーボ待ちは不要
                         if self.ctd.read().return_delay_time() > 0 {
-                            // 待ちなし
+                            // 追加待ちなし
                         } else {
                             // waitが必要
                         }
@@ -234,7 +234,7 @@ impl<'a> DynamixelProtocolHandler<'a> {
                         self.return_packet = self.write_response_packet(self.ctd.read().id());
                         // 他のサーボ待ちは不要
                         if self.ctd.read().return_delay_time() > 0 {
-                            // 待ちなし
+                            // 追加待ちなし
                         } else {
                             // waitが必要
                         }
@@ -278,7 +278,7 @@ impl<'a> DynamixelProtocolHandler<'a> {
                             }
                         }
                         if self.ctd.read().return_delay_time() > 0 {
-                            // 待ちなし
+                            // 追加待ちなし
                         } else {
                             // waitが必要
                         }
@@ -301,6 +301,7 @@ impl<'a> DynamixelProtocolHandler<'a> {
                             - 7)
                             / (length + 1);
                         // 7 = instruction + address(2) + read_length(2) + crc(2)
+                        // id + data lengthで詰まっているのでidが一致する場合書き込む
                         for i in 0..id_len {
                             let id_pos = Packet::Parameter0.to_pos() + 4 + i * (length + 1);
                             if v[id_pos] == self.ctd.read().id() {
@@ -309,6 +310,7 @@ impl<'a> DynamixelProtocolHandler<'a> {
                                 });
                             }
                         }
+                        // 返信は不要
                     }
                     _ => {}
                 };
@@ -746,6 +748,11 @@ mod tests {
             dxl.return_packet(),
             [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]
         );
+        assert_eq!(
+            *mock_uart.rx_buf,
+            [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]
+        );
+    
     }
 
     #[test]
@@ -764,7 +771,7 @@ mod tests {
             mock_uart.tx_buf.push_back(data).unwrap();
         }
         // id1が存在する場合をテスト
-        // id1が存在する場合のテストが必要だがmock_clockの工夫が必要👺
+        // id1が存在しない場合のテストが必要だがmock_clockの工夫が必要👺
         let id1_response = [
             0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D,
         ];
@@ -784,6 +791,10 @@ mod tests {
         // ID1(XM430-W210) : For Model Number 1030(0x0406), Version of Firmware 38(0x26)
         assert_eq!(
             dxl.return_packet(),
+            [0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x6F, 0x6D]
+        );
+        assert_eq!(
+            *mock_uart.rx_buf,
             [0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x6F, 0x6D]
         );
     }
@@ -824,6 +835,13 @@ mod tests {
                 0xC0
             ]
         );
+        assert_eq!(
+            *mock_uart.rx_buf,
+            [
+                0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x00, 0x55, 0x00, 0xA6, 0x00, 0x00, 0x00, 0x8C,
+                0xC0
+            ]
+        );
     }
 
     #[test]
@@ -854,6 +872,10 @@ mod tests {
         // 返信すべき内容
         assert_eq!(
             dxl.return_packet(),
+            [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x55, 0x00, 0xA1, 0x0C,]
+        );
+        assert_eq!(
+            *mock_uart.rx_buf,
             [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x55, 0x00, 0xA1, 0x0C,]
         );
         // control table dataが更新されていること
@@ -921,7 +943,21 @@ mod tests {
             ]
         );
         assert_eq!(
+            *mock_uart1.rx_buf,
+            [
+                0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x00, 0x55, 0x00, 0xA6, 0x00, 0x00, 0x00, 0x8C,
+                0xC0
+            ]
+        );
+        assert_eq!(
             dxl2.return_packet(),
+            [
+                0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x08, 0x00, 0x55, 0x00, 0x1F, 0x08, 0x00, 0x00, 0xBA,
+                0xBE
+            ]
+        );
+        assert_eq!(
+            *mock_uart2.rx_buf,
             [
                 0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x08, 0x00, 0x55, 0x00, 0x1F, 0x08, 0x00, 0x00, 0xBA,
                 0xBE
@@ -974,6 +1010,9 @@ mod tests {
         // 返信すべき内容はない
         assert_eq!(dxl1.return_packet(), []);
         assert_eq!(dxl2.return_packet(), []);
+        assert!(mock_uart1.rx_buf.is_empty());
+        assert!(mock_uart2.rx_buf.is_empty());
+        
         // control table dataが更新されていること
         assert_eq!(control_table_data1.read().goal_position(), 150);
         assert_eq!(control_table_data2.read().goal_position(), 170);
