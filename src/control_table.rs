@@ -1,12 +1,8 @@
 use crate::data_spec::{self, DataSpec};
 use core::cell::Cell;
 use core::{marker, mem};
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
-use strum_macros::FromRepr;
 
 #[allow(dead_code)]
-#[derive(FromRepr, EnumIter, Debug, PartialEq)]
 pub enum ControlTable {
     ModelNumber,
     ModelInformation,
@@ -2051,14 +2047,6 @@ mod tests {
     use crate::control_table::CustomInt;
     use crate::control_table::CONTROL_TABLE_SIZE;
     use crate::control_table::{BitsW, ControlTable, ControlTableData, W};
-
-    #[test]
-    fn from_repr() {
-        let idx: u16 = 2;
-        let name = ControlTable::from_repr(idx as usize).unwrap();
-
-        assert_eq!(name, ControlTable::FirmwareVersion);
-    }
 
     #[test]
     fn to_address() {
