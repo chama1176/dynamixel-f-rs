@@ -23,7 +23,7 @@ use core::result::Result;
 use core::time::Duration;
 use heapless::Vec;
 
-pub trait Interface {
+pub trait BufferInterface {
     fn write_byte(&mut self, data: u8);
     fn write_bytes(&mut self, data: &[u8]);
     fn read_byte(&mut self) -> Option<u8>;

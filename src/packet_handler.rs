@@ -3,7 +3,7 @@ use crate::Clock;
 use crate::ControlTable;
 use crate::ControlTableData;
 use crate::Instruction;
-use crate::Interface;
+use crate::BufferInterface;
 
 use core::fmt;
 use core::result::Result;
@@ -111,9 +111,13 @@ impl fmt::Display for CommunicationResult {
     }
 }
 
-pub struct DynamixelProtocolHandler<'a> {
-    uart: &'a mut dyn Interface,
-    clock: &'a dyn Clock,
+pub struct DynamixelProtocolHandler<I, C>
+where
+    I: BufferInterface,
+    C: Clock,
+ {
+    uart: I,
+    clock: C,
     // is_enabled: bool,
     is_using: bool,
     // packet_start_time: Duration,
@@ -122,16 +126,20 @@ pub struct DynamixelProtocolHandler<'a> {
     // tx_time_per_byte: u64,
     return_packet: Vec<u8, MAX_PACKET_LEN>,
     packet_return_time: Duration,
-    ctd: &'a ControlTableData,
+    pub ctd: ControlTableData,
 }
 
 #[allow(dead_code)]
-impl<'a> DynamixelProtocolHandler<'a> {
+impl<I, C> DynamixelProtocolHandler<I, C> 
+where
+    I: BufferInterface,
+    C: Clock,
+{
     pub fn new(
-        uart: &'a mut dyn Interface,
-        clock: &'a dyn Clock,
+        uart: I,
+        clock: C,
         baudrate: u32,
-        control_table_data: &'a ControlTableData,
+        control_table_data: ControlTableData,
     ) -> Self {
         Self {
             uart,
@@ -672,7 +680,7 @@ mod tests {
             }
         }
     }
-    impl crate::Interface for MockSerial {
+    impl crate::BufferInterface for MockSerial {
         fn write_byte(&mut self, data: u8) {
             self.rx_buf.push(data).unwrap();
         }
@@ -735,7 +743,7 @@ mod tests {
         }
 
         let mut dxl =
-            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
 
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
@@ -749,7 +757,7 @@ mod tests {
             [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]
         );
         assert_eq!(
-            *mock_uart.rx_buf,
+            dxl.uart.rx_buf,
             [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]
         );
     
@@ -780,7 +788,7 @@ mod tests {
         }
 
         let mut dxl =
-            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
 
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
@@ -794,7 +802,7 @@ mod tests {
             [0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x6F, 0x6D]
         );
         assert_eq!(
-            *mock_uart.rx_buf,
+            dxl.uart.rx_buf,
             [0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x6F, 0x6D]
         );
     }
@@ -819,7 +827,7 @@ mod tests {
         }
 
         let mut dxl =
-            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
 
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
@@ -836,7 +844,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            *mock_uart.rx_buf,
+            dxl.uart.rx_buf,
             [
                 0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x00, 0x55, 0x00, 0xA6, 0x00, 0x00, 0x00, 0x8C,
                 0xC0
@@ -862,10 +870,13 @@ mod tests {
         }
 
         let mut dxl =
-            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
 
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
+
+        // control table dataが更新されていること
+        assert_eq!(dxl.ctd.read().goal_position(), 512);
 
         // 返信すべき時間
         assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
@@ -875,18 +886,17 @@ mod tests {
             [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x55, 0x00, 0xA1, 0x0C,]
         );
         assert_eq!(
-            *mock_uart.rx_buf,
+            dxl.uart.rx_buf,
             [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x55, 0x00, 0xA1, 0x0C,]
         );
-        // control table dataが更新されていること
-        assert_eq!(control_table_data.read().goal_position(), 512);
     }
 
     #[test]
     fn sync_read() {
         let mut mock_uart1 = MockSerial::new();
         let mut mock_uart2 = MockSerial::new();
-        let mock_clock = MockClock::new();
+        let mock_clock1 = MockClock::new();
+        let mock_clock2 = MockClock::new();
         let control_table_data1 = ControlTableData::new();
         control_table_data1.modify(|_, w| w.id().bits(1));
         control_table_data1.modify(|_, w| w.present_position().bits(166));
@@ -915,16 +925,16 @@ mod tests {
         }
 
         let mut dxl1 = DynamixelProtocolHandler::new(
-            &mut mock_uart1,
-            &mock_clock,
+            mock_uart1,
+            mock_clock1,
             115200,
-            &control_table_data1,
+            control_table_data1,
         );
         let mut dxl2 = DynamixelProtocolHandler::new(
-            &mut mock_uart2,
-            &mock_clock,
+            mock_uart2,
+            mock_clock2,
             115200,
-            &control_table_data2,
+            control_table_data2,
         );
 
         // パースを周期実行
@@ -943,7 +953,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            *mock_uart1.rx_buf,
+            dxl1.uart.rx_buf,
             [
                 0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x00, 0x55, 0x00, 0xA6, 0x00, 0x00, 0x00, 0x8C,
                 0xC0
@@ -957,7 +967,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            *mock_uart2.rx_buf,
+            dxl2.uart.rx_buf,
             [
                 0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x08, 0x00, 0x55, 0x00, 0x1F, 0x08, 0x00, 0x00, 0xBA,
                 0xBE
@@ -969,7 +979,8 @@ mod tests {
     fn sync_write() {
         let mut mock_uart1 = MockSerial::new();
         let mut mock_uart2 = MockSerial::new();
-        let mock_clock = MockClock::new();
+        let mock_clock1 = MockClock::new();
+        let mock_clock2 = MockClock::new();
         let control_table_data1 = ControlTableData::new();
         control_table_data1.modify(|_, w| w.id().bits(1));
         let control_table_data2 = ControlTableData::new();
@@ -988,21 +999,25 @@ mod tests {
         }
 
         let mut dxl1 = DynamixelProtocolHandler::new(
-            &mut mock_uart1,
-            &mock_clock,
+            mock_uart1,
+            mock_clock1,
             115200,
-            &control_table_data1,
+            control_table_data1,
         );
         let mut dxl2 = DynamixelProtocolHandler::new(
-            &mut mock_uart2,
-            &mock_clock,
+            mock_uart2,
+            mock_clock2,
             115200,
-            &control_table_data2,
+            control_table_data2,
         );
 
         // パースを周期実行
         assert_eq!(dxl1.parse_data(), Ok(()));
         assert_eq!(dxl2.parse_data(), Ok(()));
+
+        // control table dataが更新されていること
+        assert_eq!(dxl1.ctd.read().goal_position(), 150);
+        assert_eq!(dxl2.ctd.read().goal_position(), 170);
 
         // 返信すべき時間
         assert_eq!(dxl1.packet_return_time(), Duration::new(0, 0));
@@ -1010,12 +1025,9 @@ mod tests {
         // 返信すべき内容はない
         assert_eq!(dxl1.return_packet(), []);
         assert_eq!(dxl2.return_packet(), []);
-        assert!(mock_uart1.rx_buf.is_empty());
-        assert!(mock_uart2.rx_buf.is_empty());
+        assert!(dxl1.uart.rx_buf.is_empty());
+        assert!(dxl2.uart.rx_buf.is_empty());
         
-        // control table dataが更新されていること
-        assert_eq!(control_table_data1.read().goal_position(), 150);
-        assert_eq!(control_table_data2.read().goal_position(), 170);
     }
 
     #[test]
@@ -1025,7 +1037,7 @@ mod tests {
         let control_table_data = ControlTableData::new();
 
         let dxl =
-            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
         msg.extend(
             [
@@ -1042,7 +1054,7 @@ mod tests {
     // fn calc_crc() {
     //     let mut mock_uart = MockSerial::new();
     //     let mock_clock = MockClock::new();
-    //     let dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200);
+    //     let dxl = DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200);
     //     let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
     //     msg.extend(
     //         [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x06, 0x02]
@@ -1059,7 +1071,7 @@ mod tests {
         let control_table_data = ControlTableData::new();
 
         let mut dxl =
-            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
         msg.extend(
             [
@@ -1092,7 +1104,7 @@ mod tests {
     //     let mut mock_uart = MockSerial::new();
     //     let mock_clock = MockClock::new();
 
-    //     let mut dxl = DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200);
+    //     let mut dxl = DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200);
     //     dxl.set_packet_timeout_length(10);
     //     assert_eq!(dxl.packet_timeout.as_micros(), 4700);
     //     assert_eq!(dxl.is_packet_timeout(), false);
@@ -1114,8 +1126,8 @@ mod tests {
         mock_uart.tx_buf.push_back(3).unwrap();
         let mock_clock = MockClock::new();
         let mut dxl =
-            DynamixelProtocolHandler::new(&mut mock_uart, &mock_clock, 115200, &control_table_data);
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
         dxl.clear_port();
-        assert_eq!(mock_uart.tx_buf.is_empty(), true);
+        assert_eq!(dxl.uart.tx_buf.is_empty(), true);
     }
 }
