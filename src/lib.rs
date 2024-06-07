@@ -3,6 +3,7 @@
 //! Use this crate to share same bus line with dynamixels and communicate.
 //!
 #![allow(unused_imports)]
+pub mod buffer;
 pub mod control_data;
 pub mod control_table;
 mod data_spec;

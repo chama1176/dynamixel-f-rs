@@ -1,9 +1,9 @@
 use crate::control_table;
+use crate::BufferInterface;
 use crate::Clock;
 use crate::ControlTable;
 use crate::ControlTableData;
 use crate::Instruction;
-use crate::BufferInterface;
 
 use core::fmt;
 use core::result::Result;
@@ -115,7 +115,7 @@ pub struct DynamixelProtocolHandler<I, C>
 where
     I: BufferInterface,
     C: Clock,
- {
+{
     uart: I,
     clock: C,
     // is_enabled: bool,
@@ -130,17 +130,12 @@ where
 }
 
 #[allow(dead_code)]
-impl<I, C> DynamixelProtocolHandler<I, C> 
+impl<I, C> DynamixelProtocolHandler<I, C>
 where
     I: BufferInterface,
     C: Clock,
 {
-    pub fn new(
-        uart: I,
-        clock: C,
-        baudrate: u32,
-        control_table_data: ControlTableData,
-    ) -> Self {
+    pub fn new(uart: I, clock: C, baudrate: u32, control_table_data: ControlTableData) -> Self {
         Self {
             uart,
             clock,
@@ -760,7 +755,6 @@ mod tests {
             dxl.uart.rx_buf,
             [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]
         );
-    
     }
 
     #[test]
@@ -924,18 +918,10 @@ mod tests {
             mock_uart2.tx_buf.push_back(data).unwrap();
         }
 
-        let mut dxl1 = DynamixelProtocolHandler::new(
-            mock_uart1,
-            mock_clock1,
-            115200,
-            control_table_data1,
-        );
-        let mut dxl2 = DynamixelProtocolHandler::new(
-            mock_uart2,
-            mock_clock2,
-            115200,
-            control_table_data2,
-        );
+        let mut dxl1 =
+            DynamixelProtocolHandler::new(mock_uart1, mock_clock1, 115200, control_table_data1);
+        let mut dxl2 =
+            DynamixelProtocolHandler::new(mock_uart2, mock_clock2, 115200, control_table_data2);
 
         // パースを周期実行
         assert_eq!(dxl1.parse_data(), Ok(()));
@@ -998,18 +984,10 @@ mod tests {
             mock_uart2.tx_buf.push_back(data).unwrap();
         }
 
-        let mut dxl1 = DynamixelProtocolHandler::new(
-            mock_uart1,
-            mock_clock1,
-            115200,
-            control_table_data1,
-        );
-        let mut dxl2 = DynamixelProtocolHandler::new(
-            mock_uart2,
-            mock_clock2,
-            115200,
-            control_table_data2,
-        );
+        let mut dxl1 =
+            DynamixelProtocolHandler::new(mock_uart1, mock_clock1, 115200, control_table_data1);
+        let mut dxl2 =
+            DynamixelProtocolHandler::new(mock_uart2, mock_clock2, 115200, control_table_data2);
 
         // パースを周期実行
         assert_eq!(dxl1.parse_data(), Ok(()));
@@ -1027,7 +1005,6 @@ mod tests {
         assert_eq!(dxl2.return_packet(), []);
         assert!(dxl1.uart.rx_buf.is_empty());
         assert!(dxl2.uart.rx_buf.is_empty());
-        
     }
 
     #[test]
@@ -1036,8 +1013,7 @@ mod tests {
         let mock_clock = MockClock::new();
         let control_table_data = ControlTableData::new();
 
-        let dxl =
-            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
+        let dxl = DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
         msg.extend(
             [
