@@ -29,6 +29,13 @@ impl<const BUFFER_SIZE: usize> RingBuffer<BUFFER_SIZE> {
         self.inc_rp();
         Some(data)
     }
+    pub fn is_empty(&self) -> bool{
+        if self.rp_ == self.wp_ {
+            true
+        }else {
+            false
+        }
+    }
     fn inc_wp(&mut self) {
         self.wp_ = (self.wp_ + 1) & (BUFFER_SIZE - 1);
     }

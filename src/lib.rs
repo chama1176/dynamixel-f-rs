@@ -11,6 +11,8 @@ mod instruction;
 pub mod packet_handler;
 pub mod utils;
 
+
+pub use buffer::RingBuffer;
 pub use control_data::*;
 pub use control_table::ControlTable;
 pub use control_table::ControlTableData;
@@ -28,9 +30,15 @@ pub trait BufferInterface {
     fn write_byte(&mut self, data: u8);
     fn write_bytes(&mut self, data: &[u8]);
     fn read_byte(&mut self) -> Option<u8>;
+    // return read size as Option
     fn read_bytes(&mut self, buf: &mut [u8]) -> Option<usize>;
     fn clear_read_buf(&mut self);
 }
+
+pub trait QueueInterface {
+    fn enqueue(&mut self, data: u8) -> Result<(), ()>;
+}
+
 pub trait Clock {
     fn get_current_time(&self) -> Duration;
 }

@@ -116,7 +116,7 @@ where
     I: BufferInterface,
     C: Clock,
 {
-    uart: I,
+    pub uart: I,
     clock: C,
     // is_enabled: bool,
     is_using: bool,
@@ -720,6 +720,36 @@ mod tests {
             self.time_elasped.clone().into_inner()
         }
     }
+
+    #[test]
+    fn empty() {
+        let mut mock_uart = MockSerial::new();
+        let mock_clock = MockClock::new();
+        let control_table_data = ControlTableData::new();
+        control_table_data.modify(|_, w| w.model_number().bits(0x0406));
+        control_table_data.modify(|_, w| w.firmware_version().bits(0x26));
+        control_table_data.modify(|_, w| w.id().bits(1));
+
+        let mut dxl =
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
+
+        // パースを周期実行
+        assert_eq!(dxl.parse_data(), Ok(()));
+
+        // 返信すべき時間
+        assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
+        // 返信すべき内容
+        // ID1(XM430-W210) : For Model Number 1030(0x0406), Version of Firmware 38(0x26)
+        assert_eq!(
+            dxl.return_packet(),
+            [0xFF]
+        );
+        assert_eq!(
+            dxl.uart.rx_buf,
+            [0xFF]
+        );
+    }
+
 
     #[test]
     fn ping() {
