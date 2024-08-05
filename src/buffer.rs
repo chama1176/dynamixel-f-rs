@@ -29,10 +29,10 @@ impl<const BUFFER_SIZE: usize> RingBuffer<BUFFER_SIZE> {
         self.inc_rp();
         Some(data)
     }
-    pub fn is_empty(&self) -> bool{
+    pub fn is_empty(&self) -> bool {
         if self.rp_ == self.wp_ {
             true
-        }else {
+        } else {
             false
         }
     }

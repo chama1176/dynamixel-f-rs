@@ -11,7 +11,6 @@ mod instruction;
 pub mod packet_handler;
 pub mod utils;
 
-
 pub use buffer::RingBuffer;
 pub use control_data::*;
 pub use control_table::ControlTable;

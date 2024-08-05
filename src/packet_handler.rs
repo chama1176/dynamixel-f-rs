@@ -6,6 +6,7 @@ use crate::ControlTableData;
 use crate::Instruction;
 
 use core::fmt;
+use core::fmt::Write;
 use core::result::Result;
 use core::time::Duration;
 use heapless::Vec;
@@ -96,7 +97,7 @@ impl fmt::Display for CommunicationResult {
             }
             CommunicationResult::TxError => write!(f, "[TxRxResult] Incorrect instruction packet!"),
             CommunicationResult::RxWaiting => {
-                write!(f, "[TxRxResult] Now recieving status packet!")
+                write!(f, "[TxRxResult] Now recieving packet!")
             }
             CommunicationResult::RxTimeout => write!(f, "[TxRxResult] There is no status packet!"),
             CommunicationResult::RxCorrupt => write!(f, "[TxRxResult] Incorrect status packet!"),
@@ -108,6 +109,124 @@ impl fmt::Display for CommunicationResult {
                 write!(f, "[TxRxResult] Something went wrong!")
             }
         }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ProtocolHandlerParsingState {
+    WaitForCommandPacket,
+    WaitForOthersResponsePacket, // After this wait for return delay time
+    WaitReturnDelayTime,
+    Init,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PacketRecievingState {
+    Waiting,
+    Init,
+}
+
+trait DynamixelPacket {
+    fn add_stuffing(&mut self);
+    fn remove_stuffing(&mut self);
+}
+
+impl DynamixelPacket for Vec<u8, MAX_PACKET_LEN> {
+    fn add_stuffing(&mut self) {
+        let packet_length_in = u16::from_le_bytes([
+            self[Packet::LengthL.to_pos()],
+            self[Packet::LengthH.to_pos()],
+        ]);
+        let mut packet_length_out = packet_length_in;
+
+        if packet_length_in < 8 {
+            // INSTRUCTION, ADDR_L, ADDR_H, CRC16_L, CRC16_H + FF FF FD
+            return;
+        }
+
+        let packet_length_before_crc = packet_length_in - 2;
+        for i in 3..packet_length_before_crc as usize {
+            let check = i + Packet::Instruction.to_pos() - 2;
+            if self[check + 0] == 0xFF && self[check + 1] == 0xFF && self[check + 2] == 0xFD {
+                packet_length_out += 1;
+            }
+        }
+
+        if packet_length_in == packet_length_out {
+            // no stuffing required
+            return;
+        }
+        self.resize(
+            self.len() + packet_length_out as usize - packet_length_in as usize,
+            0,
+        )
+        .unwrap();
+
+        let mut out_index = packet_length_out as usize + 6 - 2; // last index before crc
+        let mut in_index = packet_length_in as usize + 6 - 2; // last index before crc
+        while out_index != in_index {
+            if self[in_index] == 0xFD && self[in_index - 1] == 0xFF && self[in_index - 2] == 0xFF {
+                self[out_index] = 0xFD; // byte stuffing
+                out_index -= 1;
+                if out_index != in_index {
+                    self[out_index] = self[in_index]; // FD
+                    out_index -= 1;
+                    in_index -= 1;
+                    self[out_index] = self[in_index]; // FF
+                    out_index -= 1;
+                    in_index -= 1;
+                    self[out_index] = self[in_index]; // FF
+                    out_index -= 1;
+                    in_index -= 1;
+                }
+            } else {
+                self[out_index] = self[in_index];
+                out_index -= 1;
+                in_index -= 1;
+            }
+        }
+
+        self[Packet::LengthL.to_pos()] = packet_length_out.to_le_bytes()[0];
+        self[Packet::LengthH.to_pos()] = packet_length_out.to_le_bytes()[1];
+
+        return;
+    }
+
+    fn remove_stuffing(&mut self) {
+        let packet_length_in = u16::from_le_bytes([
+            self[Packet::LengthL.to_pos()],
+            self[Packet::LengthH.to_pos()],
+        ]);
+        let mut packet_length_out = packet_length_in;
+
+        let mut index = Packet::Instruction.to_pos() as usize;
+        let mut i = 0;
+        // except CRC
+        while i < (packet_length_in - 2) as usize {
+            if self[i + Packet::Instruction.to_pos()] == 0xFD
+                && self[i + Packet::Instruction.to_pos() + 1] == 0xFD
+                && self[i + Packet::Instruction.to_pos() - 1] == 0xFF
+                && self[i + Packet::Instruction.to_pos() - 2] == 0xFF
+            {
+                // FF FF FD FD
+                packet_length_out -= 1;
+                i += 1;
+            }
+            self[index] = self[i + Packet::Instruction.to_pos()];
+            index += 1;
+            i += 1;
+        }
+
+        self[index] = self[Packet::Instruction.to_pos() + packet_length_in as usize - 2];
+        index += 1;
+        self[index] = self[Packet::Instruction.to_pos() + packet_length_in as usize - 1];
+        index += 1;
+
+        self[Packet::LengthL.to_pos()] = packet_length_out.to_le_bytes()[0];
+        self[Packet::LengthH.to_pos()] = packet_length_out.to_le_bytes()[1];
+        self.resize(index, 0).unwrap();
     }
 }
 
@@ -127,6 +246,12 @@ where
     return_packet: Vec<u8, MAX_PACKET_LEN>,
     packet_return_time: Duration,
     pub ctd: ControlTableData,
+    wait_length: usize,
+    msg: Vec<u8, MAX_PACKET_LEN>, // VecDeque is not implemented in heapless.
+    parsing_state: ProtocolHandlerParsingState,
+    packet_recieving_state: PacketRecievingState,
+    last_recieved_command: u8,
+    last_recieved_id: u8,
 }
 
 #[allow(dead_code)]
@@ -149,181 +274,184 @@ where
             return_packet: Vec::new(),
             packet_return_time: Duration::new(0, 0),
             ctd: control_table_data,
+            wait_length: 0,
+            msg: Vec::<u8, MAX_PACKET_LEN>::new(),
+            parsing_state: ProtocolHandlerParsingState::Init,
+            packet_recieving_state: PacketRecievingState::Init,
+            last_recieved_command: Instruction::Unknown.into(),
+            last_recieved_id: 1,
         }
     }
 
     pub fn parse_data(&mut self) -> Result<(), ()> {
-        // masterからの指令待ちはタイムアウト不要
-        match self.receive_packet(Duration::new(0, 0)) {
-            Ok(v) => {
-                // ブロードキャストではなく、自分のIDと異なる場合は何もしなくて良い
-                if v[Packet::Id.to_pos()] != BROADCAST_ID
-                    && v[Packet::Id.to_pos()] != self.ctd.read().id()
-                {
-                    return Ok(());
-                };
+        if self.parsing_state == ProtocolHandlerParsingState::Init
+            || self.parsing_state == ProtocolHandlerParsingState::WaitForCommandPacket
+        {
+            // masterからの指令待ちはタイムアウト不要
+            match self.receive_packet(Duration::new(0, 0)) {
+                Ok(v) => {
+                    // ブロードキャストではなく、自分のIDと異なる場合は何もしなくて良い
+                    if v[Packet::Id.to_pos()] != BROADCAST_ID
+                        && v[Packet::Id.to_pos()] != self.ctd.read().id()
+                    {
+                        return Ok(());
+                    };
 
-                match v[Packet::Instruction.to_pos()] {
-                    x if x == Instruction::Ping.into() => {
-                        self.return_packet = self.ping_response_packet(
-                            self.ctd.read().id(),
-                            self.ctd.read().model_number(),
-                            self.ctd.read().firmware_version(),
-                        );
-                        // 他のサーボ待ち
-                        for _ in 1..self.ctd.read().id() {
-                            // x byte * 8 / baudrate * 1e6
-                            // return delayは最大で500us?
-                            let wait_us = self.return_packet.len() as u32 * 8 * 1_000_000
-                                / self.baudrate
-                                + 500;
-                            match self.receive_packet(Duration::from_micros(wait_us.into())) {
-                                Ok(ov) => {
-                                    if ov[Packet::Id.to_pos()] == self.ctd.read().id() - 1 {
-                                        // 1つ前のidまで来ていれば抜ける
-                                        break;
-                                    }
+                    match v[Packet::Instruction.to_pos()] {
+                        x if x == Instruction::Ping.into() => {
+                            // return packetにセットしてまだ送らない
+                            self.return_packet = self.ping_response_packet(
+                                self.ctd.read().id(),
+                                self.ctd.read().model_number(),
+                                self.ctd.read().firmware_version(),
+                            );
+                            self.last_recieved_command = Instruction::Ping.into();
+                            self.parsing_state =
+                                ProtocolHandlerParsingState::WaitForOthersResponsePacket;
+                        }
+                        x if x == Instruction::Read.into() => {
+                            let address = u16::from_le_bytes([
+                                v[Packet::Parameter0.to_pos()],
+                                v[Packet::Parameter0.to_pos() + 1],
+                            ]) as usize;
+                            let length = u16::from_le_bytes([
+                                v[Packet::Parameter0.to_pos() + 2],
+                                v[Packet::Parameter0.to_pos() + 3],
+                            ]) as usize;
+                            // return packetにセットしてまだ送らない
+                            self.return_packet = self.read_response_packet(
+                                self.ctd.read().id(),
+                                &self.ctd.read().bits()[address..address + length],
+                            );
+                            self.last_recieved_command = Instruction::Read.into();
+                            self.parsing_state = ProtocolHandlerParsingState::WaitReturnDelayTime;
+                        }
+                        x if x == Instruction::Write.into() => {
+                            let address = u16::from_le_bytes([
+                                v[Packet::Parameter0.to_pos()],
+                                v[Packet::Parameter0.to_pos() + 1],
+                            ]) as usize;
+                            let data_len = u16::from_le_bytes([
+                                v[Packet::LengthL.to_pos()],
+                                v[Packet::LengthH.to_pos()],
+                            ]) as usize
+                                - 5;
+                            self.ctd.modify(|_, w| {
+                                w.bytes(
+                                    address,
+                                    &v[(Packet::Parameter0.to_pos() + 2)
+                                        ..(Packet::Parameter0.to_pos() + 2 + data_len)],
+                                )
+                            });
+                            // return packetにセットしてまだ送らない
+                            self.return_packet = self.write_response_packet(self.ctd.read().id());
+                            self.last_recieved_command = Instruction::Write.into();
+                            self.parsing_state = ProtocolHandlerParsingState::WaitReturnDelayTime;
+                        }
+                        x if x == Instruction::SyncRead.into() => {
+                            let id_len = u16::from_le_bytes([
+                                v[Packet::LengthL.to_pos()],
+                                v[Packet::LengthH.to_pos()],
+                            ]) as usize
+                                - 7; // 7 = instruction + address(2) + read_length(2) + crc(2)
+                            let address = u16::from_le_bytes([
+                                v[Packet::Parameter0.to_pos()],
+                                v[Packet::Parameter0.to_pos() + 1],
+                            ]) as usize;
+                            let length = u16::from_le_bytes([
+                                v[Packet::Parameter0.to_pos() + 2],
+                                v[Packet::Parameter0.to_pos() + 3],
+                            ]) as usize;
+                            // return packetにセットしてまだ送らない
+                            self.return_packet = self.read_response_packet(
+                                self.ctd.read().id(),
+                                &self.ctd.read().bits()[address..address + length],
+                            );
+                            self.last_recieved_command = Instruction::SyncRead.into();
+                            self.parsing_state =
+                                ProtocolHandlerParsingState::WaitForOthersResponsePacket;
+                        }
+                        x if x == Instruction::SyncWrite.into() => {
+                            let address = u16::from_le_bytes([
+                                v[Packet::Parameter0.to_pos()],
+                                v[Packet::Parameter0.to_pos() + 1],
+                            ]) as usize;
+                            let length = u16::from_le_bytes([
+                                v[Packet::Parameter0.to_pos() + 2],
+                                v[Packet::Parameter0.to_pos() + 3],
+                            ]) as usize;
+                            let id_len = (u16::from_le_bytes([
+                                v[Packet::LengthL.to_pos()],
+                                v[Packet::LengthH.to_pos()],
+                            ]) as usize
+                                - 7)
+                                / (length + 1);
+                            // 7 = instruction + address(2) + read_length(2) + crc(2)
+                            // id + data lengthで詰まっているのでidが一致する場合書き込む
+                            for i in 0..id_len {
+                                let id_pos = Packet::Parameter0.to_pos() + 4 + i * (length + 1);
+                                if v[id_pos] == self.ctd.read().id() {
+                                    self.ctd.modify(|_, w| {
+                                        w.bytes(address, &v[(id_pos + 1)..(id_pos + 1 + length)])
+                                    });
                                 }
-                                Err(_) => {}
                             }
+                            // 返信は不要
+                            self.parsing_state = ProtocolHandlerParsingState::Init;
+                            return Ok(());
                         }
-                        if self.ctd.read().return_delay_time() > 0 {
-                            // 追加待ちなし
-                        } else {
-                            // waitが必要
+                        _ => {
+                            return Ok(());
                         }
-                        // 送信
-                        self.uart.write_bytes(&self.return_packet);
+                    };
+                }
+                Err(e) => {
+                    if e == CommunicationResult::RxWaiting {
+                        self.parsing_state = ProtocolHandlerParsingState::WaitForCommandPacket;
+                        return Ok(());
+                    } else {
+                        self.parsing_state = ProtocolHandlerParsingState::Init;
+                        return Err(());
                     }
-                    x if x == Instruction::Read.into() => {
-                        let address = u16::from_le_bytes([
-                            v[Packet::Parameter0.to_pos()],
-                            v[Packet::Parameter0.to_pos() + 1],
-                        ]) as usize;
-                        let length = u16::from_le_bytes([
-                            v[Packet::Parameter0.to_pos() + 2],
-                            v[Packet::Parameter0.to_pos() + 3],
-                        ]) as usize;
-                        self.return_packet = self.read_response_packet(
-                            self.ctd.read().id(),
-                            &self.ctd.read().bits()[address..address + length],
-                        );
-                        // 他のサーボ待ちは不要
-                        if self.ctd.read().return_delay_time() > 0 {
-                            // 追加待ちなし
-                        } else {
-                            // waitが必要
-                        }
-                        // 送信
-                        self.uart.write_bytes(&self.return_packet);
-                    }
-                    x if x == Instruction::Write.into() => {
-                        let address = u16::from_le_bytes([
-                            v[Packet::Parameter0.to_pos()],
-                            v[Packet::Parameter0.to_pos() + 1],
-                        ]) as usize;
-                        let data_len = u16::from_le_bytes([
-                            v[Packet::LengthL.to_pos()],
-                            v[Packet::LengthH.to_pos()],
-                        ]) as usize
-                            - 5;
-                        self.ctd.modify(|_, w| {
-                            w.bytes(
-                                address,
-                                &v[(Packet::Parameter0.to_pos() + 2)
-                                    ..(Packet::Parameter0.to_pos() + 2 + data_len)],
-                            )
-                        });
-                        self.return_packet = self.write_response_packet(self.ctd.read().id());
-                        // 他のサーボ待ちは不要
-                        if self.ctd.read().return_delay_time() > 0 {
-                            // 追加待ちなし
-                        } else {
-                            // waitが必要
-                        }
-                        // 送信
-                        self.uart.write_bytes(&self.return_packet);
-                    }
-                    x if x == Instruction::SyncRead.into() => {
-                        let id_len = u16::from_le_bytes([
-                            v[Packet::LengthL.to_pos()],
-                            v[Packet::LengthH.to_pos()],
-                        ]) as usize
-                            - 7; // 7 = instruction + address(2) + read_length(2) + crc(2)
-                        let address = u16::from_le_bytes([
-                            v[Packet::Parameter0.to_pos()],
-                            v[Packet::Parameter0.to_pos() + 1],
-                        ]) as usize;
-                        let length = u16::from_le_bytes([
-                            v[Packet::Parameter0.to_pos() + 2],
-                            v[Packet::Parameter0.to_pos() + 3],
-                        ]) as usize;
-                        self.return_packet = self.read_response_packet(
-                            self.ctd.read().id(),
-                            &self.ctd.read().bits()[address..address + length],
-                        );
-                        // 他のサーボ待ち
-                        for i in 0..id_len {
-                            if v[Packet::Parameter0.to_pos() + 4 + i] == self.ctd.read().id() {
-                                // 自分が返す番だったら抜ける
-                                break;
-                            }
-                            // x byte * 8 / baudrate * 1e6
-                            // return delayは最大で500us?
-                            let wait_us = self.return_packet.len() as u32 * 8 * 1_000_000
-                                / self.baudrate
-                                + 500;
-                            match self.receive_packet(Duration::from_micros(wait_us.into())) {
-                                Ok(_) => {
-                                    // 中身は確認しない
-                                }
-                                Err(_) => {}
-                            }
-                        }
-                        if self.ctd.read().return_delay_time() > 0 {
-                            // 追加待ちなし
-                        } else {
-                            // waitが必要
-                        }
-                        // 送信
-                        self.uart.write_bytes(&self.return_packet);
-                    }
-                    x if x == Instruction::SyncWrite.into() => {
-                        let address = u16::from_le_bytes([
-                            v[Packet::Parameter0.to_pos()],
-                            v[Packet::Parameter0.to_pos() + 1],
-                        ]) as usize;
-                        let length = u16::from_le_bytes([
-                            v[Packet::Parameter0.to_pos() + 2],
-                            v[Packet::Parameter0.to_pos() + 3],
-                        ]) as usize;
-                        let id_len = (u16::from_le_bytes([
-                            v[Packet::LengthL.to_pos()],
-                            v[Packet::LengthH.to_pos()],
-                        ]) as usize
-                            - 7)
-                            / (length + 1);
-                        // 7 = instruction + address(2) + read_length(2) + crc(2)
-                        // id + data lengthで詰まっているのでidが一致する場合書き込む
-                        for i in 0..id_len {
-                            let id_pos = Packet::Parameter0.to_pos() + 4 + i * (length + 1);
-                            if v[id_pos] == self.ctd.read().id() {
-                                self.ctd.modify(|_, w| {
-                                    w.bytes(address, &v[(id_pos + 1)..(id_pos + 1 + length)])
-                                });
-                            }
-                        }
-                        // 返信は不要
-                    }
-                    _ => {}
-                };
-
-                return Ok(());
-            }
-            Err(_) => {
-                return Err(());
+                }
             }
         }
+
+        if self.parsing_state == ProtocolHandlerParsingState::WaitForOthersResponsePacket {
+            // 他のサーボ待ち
+            for _ in self.last_recieved_id..self.ctd.read().id() {
+                // x byte * 8 / baudrate * 1e6
+                // return delayは最大で500us?
+                let wait_us = self.return_packet.len() as u32 * 8 * 1_000_000 / self.baudrate + 500;
+                match self.receive_packet(Duration::from_micros(wait_us.into())) {
+                    Ok(ov) => {
+                        self.last_recieved_id = ov[Packet::Id.to_pos()];
+                        if ov[Packet::Id.to_pos()] == self.ctd.read().id() - 1 {
+                            // 1つ前のidまで来ていれば抜ける
+                            self.parsing_state = ProtocolHandlerParsingState::WaitReturnDelayTime;
+                            break;
+                        }
+                    }
+                    Err(_) => {}
+                }
+            }
+        }
+
+        if self.parsing_state == ProtocolHandlerParsingState::WaitReturnDelayTime {
+            if self.ctd.read().return_delay_time() > 0 {
+                // waitが必要
+            } else {
+                // 追加待ちなし
+            }
+        }
+
+        // 送信
+        self.uart.write_bytes(&self.return_packet);
+        // 完了なので状態を初期化する
+        self.parsing_state = ProtocolHandlerParsingState::Init;
+        self.packet_recieving_state = PacketRecievingState::Init;
+        self.last_recieved_id = 1;
+        return Ok(());
     }
 
     pub fn packet_return_time(&self) -> Duration {
@@ -338,28 +466,31 @@ where
         &mut self,
         timeout: Duration,
     ) -> Result<Vec<u8, MAX_PACKET_LEN>, CommunicationResult> {
+        if self.packet_recieving_state == PacketRecievingState::Init {
+            self.wait_length = 10; // minimum length (HEADER0 HEADER1 HEADER2 RESERVED ID LENGTH_L LENGTH_H INST CRC16_L CRC16_H)
+            self.msg = Vec::<u8, MAX_PACKET_LEN>::new(); // VecDeque is not implemented in heapless.
+        }
+
         let result;
-        let mut wait_length = 10; // minimum length (HEADER0 HEADER1 HEADER2 RESERVED ID LENGTH_L LENGTH_H INST CRC16_L CRC16_H)
-        let mut msg = Vec::<u8, MAX_PACKET_LEN>::new(); // VecDeque is not implemented in heapless.
-        let mut res = Vec::<u8, MAX_PACKET_LEN>::new();
 
         loop {
-            res.resize(wait_length - msg.len(), 0).unwrap();
+            let mut res = Vec::<u8, MAX_PACKET_LEN>::new();
+            res.resize(self.wait_length - self.msg.len(), 0).unwrap();
             match self.uart.read_bytes(&mut *res) {
                 None => {}
                 Some(readlen) => {
-                    msg.extend(res[0..readlen].iter().cloned());
+                    self.msg.extend(res[0..readlen].iter().cloned());
                 }
             }
 
-            if msg.len() >= wait_length {
+            if self.msg.len() >= self.wait_length {
                 let mut idx = 0;
                 // find packet header
-                while idx < (msg.len() - 3) {
-                    if msg[idx + Packet::Header0.to_pos()] == 0xFF
-                        && msg[idx + Packet::Header1.to_pos()] == 0xFF
-                        && msg[idx + Packet::Header2.to_pos()] == 0xFD
-                        && msg[idx + Packet::Reserved.to_pos()] == 0x00
+                while idx < (self.msg.len() - 3) {
+                    if self.msg[idx + Packet::Header0.to_pos()] == 0xFF
+                        && self.msg[idx + Packet::Header1.to_pos()] == 0xFF
+                        && self.msg[idx + Packet::Header2.to_pos()] == 0xFD
+                        && self.msg[idx + Packet::Reserved.to_pos()] == 0x00
                     {
                         break;
                     }
@@ -368,52 +499,59 @@ where
 
                 if idx == 0 {
                     // found at the beginning of the packet
-                    if msg[Packet::Reserved.to_pos()] != 0x00
-                        || (msg[Packet::Id.to_pos()] > 0xFC && msg[Packet::Id.to_pos()] != 0xFE)
+                    if self.msg[Packet::Reserved.to_pos()] != 0x00
+                        || (self.msg[Packet::Id.to_pos()] > 0xFC
+                            && self.msg[Packet::Id.to_pos()] != 0xFE)
                         || u16::from_le_bytes([
-                            msg[Packet::LengthL.to_pos()],
-                            msg[Packet::LengthH.to_pos()],
+                            self.msg[Packet::LengthL.to_pos()],
+                            self.msg[Packet::LengthH.to_pos()],
                         ]) as usize
                             > MAX_PACKET_LEN
                     {
                         // remove the first byte in the packet
-                        for s in 0..msg.len() - 1 {
-                            msg[s] = msg[s + 1];
+                        for s in 0..self.msg.len() - 1 {
+                            self.msg[s] = self.msg[s + 1];
                         }
-                        msg.truncate(msg.len() - 1);
+                        self.msg.truncate(self.msg.len() - 1);
                         continue;
                     }
                     // re-calculate the exact length of the rx packet
-                    if wait_length
+                    if self.wait_length
                         != u16::from_le_bytes([
-                            msg[Packet::LengthL.to_pos()],
-                            msg[Packet::LengthH.to_pos()],
+                            self.msg[Packet::LengthL.to_pos()],
+                            self.msg[Packet::LengthH.to_pos()],
                         ]) as usize
                             + Packet::LengthH.to_pos()
                             + 1
                     {
-                        wait_length = u16::from_le_bytes([
-                            msg[Packet::LengthL.to_pos()],
-                            msg[Packet::LengthH.to_pos()],
+                        self.wait_length = u16::from_le_bytes([
+                            self.msg[Packet::LengthL.to_pos()],
+                            self.msg[Packet::LengthH.to_pos()],
                         ]) as usize
                             + Packet::LengthH.to_pos()
                             + 1;
                         continue;
                     }
 
-                    if msg.len() < wait_length {
+                    if self.msg.len() < self.wait_length {
                         // check timeout
                         if !timeout.is_zero() && self.clock.get_current_time() > timeout {
                             result = CommunicationResult::RxTimeout;
                             break;
                         } else {
-                            continue;
+                            // continue;
+                            // 関数をブロッキングにしないために時間待ちはこのループでは行わない
+                            result = CommunicationResult::RxWaiting;
+                            break;
                         }
                     }
 
                     // verify CRC16
-                    let crc = u16::from_le_bytes([msg[msg.len() - 2], msg[msg.len() - 1]]);
-                    if self.calc_crc_value(&msg[..msg.len() - 2]) == crc {
+                    let crc = u16::from_le_bytes([
+                        self.msg[self.msg.len() - 2],
+                        self.msg[self.msg.len() - 1],
+                    ]);
+                    if self.calc_crc_value(&self.msg[..self.msg.len() - 2]) == crc {
                         result = CommunicationResult::Success;
                     } else {
                         result = CommunicationResult::RxCRCError;
@@ -421,126 +559,44 @@ where
                     break;
                 } else {
                     // remove unnecessary packets
-                    for s in 0..(msg.len() - idx) {
-                        msg[s] = msg[idx + s];
+                    for s in 0..(self.msg.len() - idx) {
+                        self.msg[s] = self.msg[idx + s];
                     }
-                    msg.truncate(msg.len() - idx);
+                    self.msg.truncate(self.msg.len() - idx);
                 }
             } else {
                 // check timeout
                 if !timeout.is_zero() && self.clock.get_current_time() > timeout {
                     result = CommunicationResult::RxTimeout;
                     break;
+                } else {
+                    // continue;
+                    // 関数をブロッキングにしないために時間待ちはこのループでは行わない
+                    result = CommunicationResult::RxWaiting;
+                    break;
                 }
             }
-            // usleep(0);
         }
         self.is_using = false;
 
-        if result == CommunicationResult::Success {
-            self.remove_stuffing(&mut msg);
+        if result == CommunicationResult::RxWaiting {
+            self.packet_recieving_state = PacketRecievingState::Waiting;
+        } else {
+            self.packet_recieving_state = PacketRecievingState::Init;
         }
 
         if result == CommunicationResult::Success {
-            Ok(msg)
+            self.msg.remove_stuffing();
+            let mut result_msg = Vec::<u8, MAX_PACKET_LEN>::new();
+            result_msg.extend(self.msg.iter().cloned());
+            Ok(result_msg)
         } else {
             Err(result)
         }
     }
 
-    pub fn reserve_msg_header(&self) -> [u8; 4] {
+    fn reserve_msg_header(&self) -> [u8; 4] {
         [0xFF, 0xFF, 0xFD, 0x00] // Header and reserved len
-    }
-
-    fn add_stuffing(&mut self, msg: &mut Vec<u8, MAX_PACKET_LEN>) {
-        let packet_length_in =
-            u16::from_le_bytes([msg[Packet::LengthL.to_pos()], msg[Packet::LengthH.to_pos()]]);
-        let mut packet_length_out = packet_length_in;
-
-        if packet_length_in < 8 {
-            // INSTRUCTION, ADDR_L, ADDR_H, CRC16_L, CRC16_H + FF FF FD
-            return;
-        }
-
-        let packet_length_before_crc = packet_length_in - 2;
-        for i in 3..packet_length_before_crc as usize {
-            let check = i + Packet::Instruction.to_pos() - 2;
-            if msg[check + 0] == 0xFF && msg[check + 1] == 0xFF && msg[check + 2] == 0xFD {
-                packet_length_out += 1;
-            }
-        }
-
-        if packet_length_in == packet_length_out {
-            // no stuffing required
-            return;
-        }
-        msg.resize(
-            msg.len() + packet_length_out as usize - packet_length_in as usize,
-            0,
-        )
-        .unwrap();
-
-        let mut out_index = packet_length_out as usize + 6 - 2; // last index before crc
-        let mut in_index = packet_length_in as usize + 6 - 2; // last index before crc
-        while out_index != in_index {
-            if msg[in_index] == 0xFD && msg[in_index - 1] == 0xFF && msg[in_index - 2] == 0xFF {
-                msg[out_index] = 0xFD; // byte stuffing
-                out_index -= 1;
-                if out_index != in_index {
-                    msg[out_index] = msg[in_index]; // FD
-                    out_index -= 1;
-                    in_index -= 1;
-                    msg[out_index] = msg[in_index]; // FF
-                    out_index -= 1;
-                    in_index -= 1;
-                    msg[out_index] = msg[in_index]; // FF
-                    out_index -= 1;
-                    in_index -= 1;
-                }
-            } else {
-                msg[out_index] = msg[in_index];
-                out_index -= 1;
-                in_index -= 1;
-            }
-        }
-
-        msg[Packet::LengthL.to_pos()] = packet_length_out.to_le_bytes()[0];
-        msg[Packet::LengthH.to_pos()] = packet_length_out.to_le_bytes()[1];
-
-        return;
-    }
-
-    fn remove_stuffing(&mut self, msg: &mut Vec<u8, MAX_PACKET_LEN>) {
-        let packet_length_in =
-            u16::from_le_bytes([msg[Packet::LengthL.to_pos()], msg[Packet::LengthH.to_pos()]]);
-        let mut packet_length_out = packet_length_in;
-
-        let mut index = Packet::Instruction.to_pos() as usize;
-        let mut i = 0;
-        // except CRC
-        while i < (packet_length_in - 2) as usize {
-            if msg[i + Packet::Instruction.to_pos()] == 0xFD
-                && msg[i + Packet::Instruction.to_pos() + 1] == 0xFD
-                && msg[i + Packet::Instruction.to_pos() - 1] == 0xFF
-                && msg[i + Packet::Instruction.to_pos() - 2] == 0xFF
-            {
-                // FF FF FD FD
-                packet_length_out -= 1;
-                i += 1;
-            }
-            msg[index] = msg[i + Packet::Instruction.to_pos()];
-            index += 1;
-            i += 1;
-        }
-
-        msg[index] = msg[Packet::Instruction.to_pos() + packet_length_in as usize - 2];
-        index += 1;
-        msg[index] = msg[Packet::Instruction.to_pos() + packet_length_in as usize - 1];
-        index += 1;
-
-        msg[Packet::LengthL.to_pos()] = packet_length_out.to_le_bytes()[0];
-        msg[Packet::LengthH.to_pos()] = packet_length_out.to_le_bytes()[1];
-        msg.resize(index, 0).unwrap();
     }
 
     fn ping_response_packet(
@@ -638,14 +694,6 @@ where
 
     fn clear_port(&mut self) {
         self.uart.clear_read_buf();
-        // loop {
-        //     match self.uart.read_byte() {
-        //         None => {
-        //             break;
-        //         }
-        //         Some(_) => {}
-        //     }
-        // }
     }
 }
 
@@ -653,6 +701,9 @@ where
 mod tests {
     use crate::control_table;
     use crate::control_table::BitsW;
+    use crate::packet_handler::DynamixelPacket;
+    use crate::packet_handler::PacketRecievingState;
+    use crate::packet_handler::ProtocolHandlerParsingState;
     use crate::packet_handler::MAX_PACKET_LEN;
     use crate::ControlTable;
     use crate::ControlTableData;
@@ -736,20 +787,57 @@ mod tests {
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
 
+        // コマンド待ち状態になっていることを確認
+        assert_eq!(dxl.packet_recieving_state, PacketRecievingState::Waiting);
+        assert_eq!(
+            dxl.parsing_state,
+            ProtocolHandlerParsingState::WaitForCommandPacket
+        );
+
         // 返信すべき時間
         assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
         // 返信すべき内容
         // ID1(XM430-W210) : For Model Number 1030(0x0406), Version of Firmware 38(0x26)
-        assert_eq!(
-            dxl.return_packet(),
-            [0xFF]
-        );
-        assert_eq!(
-            dxl.uart.rx_buf,
-            [0xFF]
-        );
+        assert_eq!(dxl.return_packet(), []);
+        assert_eq!(dxl.uart.rx_buf, []);
     }
 
+    #[test]
+    fn not_complete_command() {
+        let mut mock_uart = MockSerial::new();
+        let mock_clock = MockClock::new();
+        let control_table_data = ControlTableData::new();
+        control_table_data.modify(|_, w| w.model_number().bits(0x0406));
+        control_table_data.modify(|_, w| w.firmware_version().bits(0x26));
+        control_table_data.modify(|_, w| w.id().bits(1));
+        // 受信するデータのテストケース
+        // 先にテストデータをいれる
+        // Ping Instruction Packet ID : 1
+        let instruction = [0xFF, 0xFF, 0xFD];
+        for data in instruction {
+            mock_uart.tx_buf.push_back(data).unwrap();
+        }
+
+        let mut dxl =
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
+
+        // パースを周期実行
+        assert_eq!(dxl.parse_data(), Ok(()));
+
+        // コマンド待ち状態になっていることを確認
+        assert_eq!(dxl.packet_recieving_state, PacketRecievingState::Waiting);
+        assert_eq!(
+            dxl.parsing_state,
+            ProtocolHandlerParsingState::WaitForCommandPacket
+        );
+
+        // 返信すべき時間
+        assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
+        // 返信すべき内容
+        // ID1(XM430-W210) : For Model Number 1030(0x0406), Version of Firmware 38(0x26)
+        assert_eq!(dxl.return_packet(), []);
+        assert_eq!(dxl.uart.rx_buf, []);
+    }
 
     #[test]
     fn ping() {
@@ -1087,7 +1175,7 @@ mod tests {
             .iter()
             .cloned(),
         );
-        dxl.add_stuffing(&mut msg);
+        msg.add_stuffing();
         assert_eq!(
             *msg,
             [
@@ -1095,7 +1183,7 @@ mod tests {
                 0xFD, 0xFD, 0x01, 0x00, 0x00
             ]
         );
-        dxl.remove_stuffing(&mut msg);
+        msg.remove_stuffing();
         assert_eq!(
             *msg,
             [
