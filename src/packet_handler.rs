@@ -247,7 +247,7 @@ where
     packet_return_time: Duration,
     pub ctd: ControlTableData,
     wait_length: usize,
-    msg: Vec<u8, MAX_PACKET_LEN>, // VecDeque is not implemented in heapless.
+    msg: Vec<u8, MAX_PACKET_LEN>, // VecDeque is not implemented in heapless.👺heapless::Dequeに置き換え可能？
     parsing_state: ProtocolHandlerParsingState,
     packet_recieving_state: PacketRecievingState,
     last_recieved_command: u8,
@@ -709,6 +709,7 @@ mod tests {
     use crate::ControlTableData;
     use crate::DynamixelProtocolHandler;
     use crate::Instruction;
+    use crate::QueueInterface;
     use core::cell::RefCell;
     use core::time::Duration;
     use heapless::Deque;
@@ -810,16 +811,17 @@ mod tests {
         control_table_data.modify(|_, w| w.model_number().bits(0x0406));
         control_table_data.modify(|_, w| w.firmware_version().bits(0x26));
         control_table_data.modify(|_, w| w.id().bits(1));
-        // 受信するデータのテストケース
-        // 先にテストデータをいれる
-        // Ping Instruction Packet ID : 1
-        let instruction = [0xFF, 0xFF, 0xFD];
-        for data in instruction {
-            mock_uart.tx_buf.push_back(data).unwrap();
-        }
 
         let mut dxl =
             DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
+
+        // 受信するデータのテストケース
+        // Ping Instruction Packet ID : 1
+        let instruction = [0xFF, 0xFF, 0xFD];
+        for data in instruction {
+            dxl.uart.tx_buf.push_back(data).unwrap();
+        }
+
 
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
@@ -847,16 +849,16 @@ mod tests {
         control_table_data.modify(|_, w| w.model_number().bits(0x0406));
         control_table_data.modify(|_, w| w.firmware_version().bits(0x26));
         control_table_data.modify(|_, w| w.id().bits(1));
-        // 受信するデータのテストケース
-        // 先にテストデータをいれる
-        // Ping Instruction Packet ID : 1
-        let instruction = [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x03, 0x00, 0x01, 0x19, 0x4E];
-        for data in instruction {
-            mock_uart.tx_buf.push_back(data).unwrap();
-        }
 
         let mut dxl =
             DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
+
+        // 受信するデータのテストケース
+        // Ping Instruction Packet ID : 1
+        let instruction = [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x03, 0x00, 0x01, 0x19, 0x4E];
+        for data in instruction {
+            dxl.uart.tx_buf.push_back(data).unwrap();
+        }
 
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
@@ -883,12 +885,14 @@ mod tests {
         control_table_data.modify(|_, w| w.model_number().bits(0x0406));
         control_table_data.modify(|_, w| w.firmware_version().bits(0x26));
         control_table_data.modify(|_, w| w.id().bits(2));
+
+        let mut dxl =
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
         // 受信するデータのテストケース
-        // 先にテストデータをいれる
         // Ping Instruction Packet ID : 254(Broadcast ID)
         let instruction = [0xFF, 0xFF, 0xFD, 0x00, 0xFE, 0x03, 0x00, 0x01, 0x31, 0x42];
         for data in instruction {
-            mock_uart.tx_buf.push_back(data).unwrap();
+            dxl.uart.tx_buf.push_back(data).unwrap();
         }
         // id1が存在する場合をテスト
         // id1が存在しない場合のテストが必要だがmock_clockの工夫が必要👺
@@ -896,11 +900,8 @@ mod tests {
             0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D,
         ];
         for data in id1_response {
-            mock_uart.tx_buf.push_back(data).unwrap();
+            dxl.uart.tx_buf.push_back(data).unwrap();
         }
-
-        let mut dxl =
-            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
 
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
@@ -928,18 +929,18 @@ mod tests {
         control_table_data.modify(|_, w| w.firmware_version().bits(0x26));
         control_table_data.modify(|_, w| w.id().bits(1));
         control_table_data.modify(|_, w| w.present_position().bits(166));
+
+        let mut dxl =
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
+
         // 受信するデータのテストケース
-        // 先にテストデータをいれる
         // Read Instruction Packet ID: 1, Present Position(132, 0x0084, 4[byte])
         let instruction = [
             0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x02, 0x84, 0x00, 0x04, 0x00, 0x1D, 0x15,
         ];
         for data in instruction {
-            mock_uart.tx_buf.push_back(data).unwrap();
+            dxl.uart.tx_buf.push_back(data).unwrap();
         }
-
-        let mut dxl =
-            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
 
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
@@ -970,19 +971,19 @@ mod tests {
         let mock_clock = MockClock::new();
         let control_table_data = ControlTableData::new();
         control_table_data.modify(|_, w| w.id().bits(1));
+
+        let mut dxl =
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
+
         // 受信するデータのテストケース
-        // 先にテストデータをいれる
         // ID1(XM430-W210) : Write 512(0x00000200) to Goal Position(116, 0x0074, 4[byte])
         let instruction = [
             0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x09, 0x00, 0x03, 0x74, 0x00, 0x00, 0x02, 0x00, 0x00,
             0xCA, 0x89,
         ];
         for data in instruction {
-            mock_uart.tx_buf.push_back(data).unwrap();
+            dxl.uart.tx_buf.push_back(data).unwrap();
         }
-
-        let mut dxl =
-            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
 
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
@@ -1015,8 +1016,13 @@ mod tests {
         let control_table_data2 = ControlTableData::new();
         control_table_data2.modify(|_, w| w.id().bits(2));
         control_table_data2.modify(|_, w| w.present_position().bits(2079));
+
+        let mut dxl1 =
+            DynamixelProtocolHandler::new(mock_uart1, mock_clock1, 115200, control_table_data1);
+        let mut dxl2 =
+            DynamixelProtocolHandler::new(mock_uart2, mock_clock2, 115200, control_table_data2);
+
         // 受信するデータのテストケース
-        // 先にテストデータをいれる
         // ID1(XM430-W210) : Present Position(132, 0x0084, 4[byte]) = 166(0x000000A6)
         // ID2(XM430-W210) : Present Position(132, 0x0084, 4[byte]) = 2,079(0x0000081F)
         let instruction = [
@@ -1024,8 +1030,8 @@ mod tests {
             0xCE, 0xFA,
         ];
         for data in instruction {
-            mock_uart1.tx_buf.push_back(data).unwrap();
-            mock_uart2.tx_buf.push_back(data).unwrap();
+            dxl1.uart.tx_buf.push_back(data).unwrap();
+            dxl2.uart.tx_buf.push_back(data).unwrap();
         }
         let id1_response = [
             0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x00, 0x55, 0x00, 0xA6, 0x00, 0x00, 0x00, 0x8C,
@@ -1033,13 +1039,8 @@ mod tests {
         ];
         // id2の方にはid1のresponseを入れておく
         for data in id1_response {
-            mock_uart2.tx_buf.push_back(data).unwrap();
+            dxl2.uart.tx_buf.push_back(data).unwrap();
         }
-
-        let mut dxl1 =
-            DynamixelProtocolHandler::new(mock_uart1, mock_clock1, 115200, control_table_data1);
-        let mut dxl2 =
-            DynamixelProtocolHandler::new(mock_uart2, mock_clock2, 115200, control_table_data2);
 
         // パースを周期実行
         assert_eq!(dxl1.parse_data(), Ok(()));
@@ -1089,8 +1090,13 @@ mod tests {
         control_table_data1.modify(|_, w| w.id().bits(1));
         let control_table_data2 = ControlTableData::new();
         control_table_data2.modify(|_, w| w.id().bits(2));
+
+        let mut dxl1 =
+            DynamixelProtocolHandler::new(mock_uart1, mock_clock1, 115200, control_table_data1);
+        let mut dxl2 =
+            DynamixelProtocolHandler::new(mock_uart2, mock_clock2, 115200, control_table_data2);
+
         // 受信するデータのテストケース
-        // 先にテストデータをいれる
         // ID1(XM430-W210) : Write 150(0x00000096) to Goal Position(116, 0x0074, 4[byte])
         // ID2(XM430-W210) : Write 170(0x000000AA) to Goal Position(116, 0x0074, 4[byte])
         let instruction = [
@@ -1098,14 +1104,10 @@ mod tests {
             0x00, 0x00, 0x00, 0x02, 0xAA, 0x00, 0x00, 0x00, 0x82, 0x87,
         ];
         for data in instruction {
-            mock_uart1.tx_buf.push_back(data).unwrap();
-            mock_uart2.tx_buf.push_back(data).unwrap();
+            dxl1.uart.tx_buf.push_back(data).unwrap();
+            dxl2.uart.tx_buf.push_back(data).unwrap();
         }
 
-        let mut dxl1 =
-            DynamixelProtocolHandler::new(mock_uart1, mock_clock1, 115200, control_table_data1);
-        let mut dxl2 =
-            DynamixelProtocolHandler::new(mock_uart2, mock_clock2, 115200, control_table_data2);
 
         // パースを周期実行
         assert_eq!(dxl1.parse_data(), Ok(()));
