@@ -432,7 +432,15 @@ where
                             break;
                         }
                     }
-                    Err(_) => {}
+                    Err(e) => {
+                        if e == CommunicationResult::RxWaiting {
+                            self.parsing_state = ProtocolHandlerParsingState::WaitForCommandPacket;
+                            return Ok(());
+                        } else {
+                            self.parsing_state = ProtocolHandlerParsingState::Init;
+                            return Err(());
+                        }
+                    }
                 }
             }
         }
@@ -444,7 +452,6 @@ where
                 // 追加待ちなし
             }
         }
-
         // 送信
         self.uart.write_bytes(&self.return_packet);
         // 完了なので状態を初期化する
@@ -822,7 +829,6 @@ mod tests {
             dxl.uart.tx_buf.push_back(data).unwrap();
         }
 
-
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
 
@@ -839,6 +845,31 @@ mod tests {
         // ID1(XM430-W210) : For Model Number 1030(0x0406), Version of Firmware 38(0x26)
         assert_eq!(dxl.return_packet(), []);
         assert_eq!(dxl.uart.rx_buf, []);
+
+        // 受信するデータのテストケースをここで完成させる
+        // Ping Instruction Packet ID : 1
+        let instruction = [0x00, 0x01, 0x03, 0x00, 0x01, 0x19, 0x4E];
+        for data in instruction {
+            dxl.uart.tx_buf.push_back(data).unwrap();
+        }
+
+        // パースを周期実行
+        assert_eq!(dxl.parse_data(), Ok(()));
+
+        // 返信すべき時間
+        assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
+        // 返信すべき内容
+        // ID1(XM430-W210) : For Model Number 1030(0x0406), Version of Firmware 38(0x26)
+        assert_eq!(
+            dxl.return_packet(),
+            [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]
+        );
+        assert_eq!(
+            dxl.uart.rx_buf,
+            [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]
+        );
+
+
     }
 
     #[test]
@@ -895,7 +926,6 @@ mod tests {
             dxl.uart.tx_buf.push_back(data).unwrap();
         }
         // id1が存在する場合をテスト
-        // id1が存在しない場合のテストが必要だがmock_clockの工夫が必要👺
         let id1_response = [
             0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D,
         ];
@@ -917,6 +947,49 @@ mod tests {
         assert_eq!(
             dxl.uart.rx_buf,
             [0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x6F, 0x6D]
+        );
+    }
+
+    #[test]
+    fn ping_broadcast_id1_not_response() {
+        let mut mock_uart = MockSerial::new();
+        let mock_clock = MockClock::new();
+        let control_table_data = ControlTableData::new();
+        control_table_data.modify(|_, w| w.model_number().bits(0x0406));
+        control_table_data.modify(|_, w| w.firmware_version().bits(0x26));
+        control_table_data.modify(|_, w| w.id().bits(2));
+
+        let mut dxl =
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
+        // 受信するデータのテストケース
+        // Ping Instruction Packet ID : 254(Broadcast ID)
+        let instruction = [0xFF, 0xFF, 0xFD, 0x00, 0xFE, 0x03, 0x00, 0x01, 0x31, 0x42];
+        for data in instruction {
+            dxl.uart.tx_buf.push_back(data).unwrap();
+        }
+        // id1が存在しない場合のテスト
+        // let id1_response = [
+        //     0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D,
+        // ];
+        // for data in id1_response {
+        //     dxl.uart.tx_buf.push_back(data).unwrap();
+        // }
+
+        // パースを周期実行
+        assert_eq!(dxl.parse_data(), Ok(()));
+
+        // 返信すべき時間
+        assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
+        // 返信すべき内容
+        // ID1(XM430-W210) : For Model Number 1030(0x0406), Version of Firmware 38(0x26)
+        assert_eq!(
+            dxl.return_packet(),
+            [0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x6F, 0x6D]
+        );
+        // データは用意されているがid1が先に返信するのを待つはず
+        assert_eq!(
+            dxl.uart.rx_buf,
+            []
         );
     }
 
@@ -1107,7 +1180,6 @@ mod tests {
             dxl1.uart.tx_buf.push_back(data).unwrap();
             dxl2.uart.tx_buf.push_back(data).unwrap();
         }
-
 
         // パースを周期実行
         assert_eq!(dxl1.parse_data(), Ok(()));
