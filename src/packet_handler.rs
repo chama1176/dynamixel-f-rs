@@ -97,7 +97,7 @@ impl fmt::Display for CommunicationResult {
             }
             CommunicationResult::TxError => write!(f, "[TxRxResult] Incorrect instruction packet!"),
             CommunicationResult::RxWaiting => {
-                write!(f, "[TxRxResult] Now recieving packet!")
+                write!(f, "[TxRxResult] Now receiving packet!")
             }
             CommunicationResult::RxTimeout => write!(f, "[TxRxResult] There is no status packet!"),
             CommunicationResult::RxCorrupt => write!(f, "[TxRxResult] Incorrect status packet!"),
@@ -123,7 +123,7 @@ pub enum ProtocolHandlerParsingState {
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum PacketRecievingState {
+pub enum PacketReceivingState {
     Waiting,
     Init,
 }
@@ -249,9 +249,9 @@ where
     wait_length: usize,
     msg: Vec<u8, MAX_PACKET_LEN>, // VecDeque is not implemented in heapless.👺heapless::Dequeに置き換え可能？
     parsing_state: ProtocolHandlerParsingState,
-    packet_recieving_state: PacketRecievingState,
-    last_recieved_command: u8,
-    last_recieved_id: u8,
+    packet_receiving_state: PacketReceivingState,
+    last_received_command: u8,
+    last_received_id: u8,
 }
 
 #[allow(dead_code)]
@@ -277,9 +277,9 @@ where
             wait_length: 0,
             msg: Vec::<u8, MAX_PACKET_LEN>::new(),
             parsing_state: ProtocolHandlerParsingState::Init,
-            packet_recieving_state: PacketRecievingState::Init,
-            last_recieved_command: Instruction::Unknown.into(),
-            last_recieved_id: 1,
+            packet_receiving_state: PacketReceivingState::Init,
+            last_received_command: Instruction::Unknown.into(),
+            last_received_id: 1,
         }
     }
 
@@ -305,7 +305,7 @@ where
                                 self.ctd.read().model_number(),
                                 self.ctd.read().firmware_version(),
                             );
-                            self.last_recieved_command = Instruction::Ping.into();
+                            self.last_received_command = Instruction::Ping.into();
                             self.parsing_state =
                                 ProtocolHandlerParsingState::WaitForOthersResponsePacket;
                         }
@@ -323,7 +323,7 @@ where
                                 self.ctd.read().id(),
                                 &self.ctd.read().bits()[address..address + length],
                             );
-                            self.last_recieved_command = Instruction::Read.into();
+                            self.last_received_command = Instruction::Read.into();
                             self.parsing_state = ProtocolHandlerParsingState::WaitReturnDelayTime;
                         }
                         x if x == Instruction::Write.into() => {
@@ -345,7 +345,7 @@ where
                             });
                             // return packetにセットしてまだ送らない
                             self.return_packet = self.write_response_packet(self.ctd.read().id());
-                            self.last_recieved_command = Instruction::Write.into();
+                            self.last_received_command = Instruction::Write.into();
                             self.parsing_state = ProtocolHandlerParsingState::WaitReturnDelayTime;
                         }
                         x if x == Instruction::SyncRead.into() => {
@@ -367,7 +367,7 @@ where
                                 self.ctd.read().id(),
                                 &self.ctd.read().bits()[address..address + length],
                             );
-                            self.last_recieved_command = Instruction::SyncRead.into();
+                            self.last_received_command = Instruction::SyncRead.into();
                             self.parsing_state =
                                 ProtocolHandlerParsingState::WaitForOthersResponsePacket;
                         }
@@ -419,13 +419,13 @@ where
 
         if self.parsing_state == ProtocolHandlerParsingState::WaitForOthersResponsePacket {
             // 他のサーボ待ち
-            for _ in self.last_recieved_id..self.ctd.read().id() {
+            for _ in self.last_received_id..self.ctd.read().id() {
                 // x byte * 8 / baudrate * 1e6
                 // return delayは最大で500us?
                 let wait_us = self.return_packet.len() as u32 * 8 * 1_000_000 / self.baudrate + 500;
                 match self.receive_packet(Duration::from_micros(wait_us.into())) {
                     Ok(ov) => {
-                        self.last_recieved_id = ov[Packet::Id.to_pos()];
+                        self.last_received_id = ov[Packet::Id.to_pos()];
                         if ov[Packet::Id.to_pos()] == self.ctd.read().id() - 1 {
                             // 1つ前のidまで来ていれば抜ける
                             self.parsing_state = ProtocolHandlerParsingState::WaitReturnDelayTime;
@@ -434,8 +434,10 @@ where
                     }
                     Err(e) => {
                         if e == CommunicationResult::RxWaiting {
-                            self.parsing_state = ProtocolHandlerParsingState::WaitForCommandPacket;
                             return Ok(());
+                        } else if e == CommunicationResult::RxTimeout {
+                            // 他のサーボ待ちなのでTimeoutはエラーではない
+                            continue;
                         } else {
                             self.parsing_state = ProtocolHandlerParsingState::Init;
                             return Err(());
@@ -456,8 +458,8 @@ where
         self.uart.write_bytes(&self.return_packet);
         // 完了なので状態を初期化する
         self.parsing_state = ProtocolHandlerParsingState::Init;
-        self.packet_recieving_state = PacketRecievingState::Init;
-        self.last_recieved_id = 1;
+        self.packet_receiving_state = PacketReceivingState::Init;
+        self.last_received_id = 1;
         return Ok(());
     }
 
@@ -473,7 +475,7 @@ where
         &mut self,
         timeout: Duration,
     ) -> Result<Vec<u8, MAX_PACKET_LEN>, CommunicationResult> {
-        if self.packet_recieving_state == PacketRecievingState::Init {
+        if self.packet_receiving_state == PacketReceivingState::Init {
             self.wait_length = 10; // minimum length (HEADER0 HEADER1 HEADER2 RESERVED ID LENGTH_L LENGTH_H INST CRC16_L CRC16_H)
             self.msg = Vec::<u8, MAX_PACKET_LEN>::new(); // VecDeque is not implemented in heapless.
         }
@@ -573,6 +575,7 @@ where
                 }
             } else {
                 // check timeout
+                // スタート時間の考慮が必要👺
                 if !timeout.is_zero() && self.clock.get_current_time() > timeout {
                     result = CommunicationResult::RxTimeout;
                     break;
@@ -587,9 +590,9 @@ where
         self.is_using = false;
 
         if result == CommunicationResult::RxWaiting {
-            self.packet_recieving_state = PacketRecievingState::Waiting;
+            self.packet_receiving_state = PacketReceivingState::Waiting;
         } else {
-            self.packet_recieving_state = PacketRecievingState::Init;
+            self.packet_receiving_state = PacketReceivingState::Init;
         }
 
         if result == CommunicationResult::Success {
@@ -709,9 +712,10 @@ mod tests {
     use crate::control_table;
     use crate::control_table::BitsW;
     use crate::packet_handler::DynamixelPacket;
-    use crate::packet_handler::PacketRecievingState;
+    use crate::packet_handler::PacketReceivingState;
     use crate::packet_handler::ProtocolHandlerParsingState;
     use crate::packet_handler::MAX_PACKET_LEN;
+    use crate::Clock;
     use crate::ControlTable;
     use crate::ControlTableData;
     use crate::DynamixelProtocolHandler;
@@ -769,7 +773,7 @@ mod tests {
                 time_elasped: RefCell::new(Duration::new(0, 0)),
             }
         }
-        pub fn tick(&self) {
+        pub fn tick(&mut self) {
             let dt = Duration::from_millis(1);
             self.time_elasped.replace_with(|&mut old| old + dt);
         }
@@ -796,7 +800,7 @@ mod tests {
         assert_eq!(dxl.parse_data(), Ok(()));
 
         // コマンド待ち状態になっていることを確認
-        assert_eq!(dxl.packet_recieving_state, PacketRecievingState::Waiting);
+        assert_eq!(dxl.packet_receiving_state, PacketReceivingState::Waiting);
         assert_eq!(
             dxl.parsing_state,
             ProtocolHandlerParsingState::WaitForCommandPacket
@@ -833,7 +837,7 @@ mod tests {
         assert_eq!(dxl.parse_data(), Ok(()));
 
         // コマンド待ち状態になっていることを確認
-        assert_eq!(dxl.packet_recieving_state, PacketRecievingState::Waiting);
+        assert_eq!(dxl.packet_receiving_state, PacketReceivingState::Waiting);
         assert_eq!(
             dxl.parsing_state,
             ProtocolHandlerParsingState::WaitForCommandPacket
@@ -991,6 +995,20 @@ mod tests {
             dxl.uart.rx_buf,
             []
         );
+
+        // 時計を進める
+        dxl.clock.tick();
+        dxl.clock.tick();
+
+        // パースを周期実行
+        assert_eq!(dxl.parse_data(), Ok(()));
+
+        // 一定時間(1472us以上)経過後には送信しているはず
+        assert_eq!(
+            dxl.uart.rx_buf,
+            [0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x6F, 0x6D]
+        );
+
     }
 
     #[test]
