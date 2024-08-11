@@ -252,6 +252,7 @@ where
     packet_receiving_state: PacketReceivingState,
     last_received_command: u8,
     last_received_id: u8,
+    receive_packet_start_time: Duration,
 }
 
 #[allow(dead_code)]
@@ -280,6 +281,7 @@ where
             packet_receiving_state: PacketReceivingState::Init,
             last_received_command: Instruction::Unknown.into(),
             last_received_id: 1,
+            receive_packet_start_time: Duration::new(0, 0),
         }
     }
 
@@ -478,6 +480,7 @@ where
         if self.packet_receiving_state == PacketReceivingState::Init {
             self.wait_length = 10; // minimum length (HEADER0 HEADER1 HEADER2 RESERVED ID LENGTH_L LENGTH_H INST CRC16_L CRC16_H)
             self.msg = Vec::<u8, MAX_PACKET_LEN>::new(); // VecDeque is not implemented in heapless.
+            self.receive_packet_start_time = self.clock.get_current_time();
         }
 
         let result;
@@ -544,7 +547,7 @@ where
 
                     if self.msg.len() < self.wait_length {
                         // check timeout
-                        if !timeout.is_zero() && self.clock.get_current_time() > timeout {
+                        if !timeout.is_zero() && self.clock.get_current_time() > timeout + self.receive_packet_start_time{
                             result = CommunicationResult::RxTimeout;
                             break;
                         } else {
@@ -575,8 +578,7 @@ where
                 }
             } else {
                 // check timeout
-                // スタート時間の考慮が必要👺
-                if !timeout.is_zero() && self.clock.get_current_time() > timeout {
+                if !timeout.is_zero() && self.clock.get_current_time() > timeout + self.receive_packet_start_time{
                     result = CommunicationResult::RxTimeout;
                     break;
                 } else {
@@ -979,6 +981,10 @@ mod tests {
         //     dxl.uart.tx_buf.push_back(data).unwrap();
         // }
 
+        // 最初の時間を0ではなくするために時計を進める
+        dxl.clock.tick();
+        dxl.clock.tick();
+
         // パースを周期実行
         assert_eq!(dxl.parse_data(), Ok(()));
 
@@ -1284,23 +1290,6 @@ mod tests {
             ]
         );
     }
-
-    // #[test]
-    // fn clock() {
-    //     let mut mock_uart = MockSerial::new();
-    //     let mock_clock = MockClock::new();
-
-    //     let mut dxl = DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200);
-    //     dxl.set_packet_timeout_length(10);
-    //     assert_eq!(dxl.packet_timeout.as_micros(), 4700);
-    //     assert_eq!(dxl.is_packet_timeout(), false);
-    //     for _ in 0..4 {
-    //         mock_clock.tick();
-    //     }
-    //     assert_eq!(dxl.is_packet_timeout(), false);
-    //     mock_clock.tick();
-    //     assert_eq!(dxl.is_packet_timeout(), true);
-    // }
 
     #[test]
     fn clear_port() {
