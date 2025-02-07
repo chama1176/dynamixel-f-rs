@@ -227,7 +227,7 @@ impl CustomInt<{ ControlTable::ProfileVelocity as usize }> for () {
     type Ty = u32;
 }
 impl CustomInt<{ ControlTable::GoalPosition as usize }> for () {
-    type Ty = u32;
+    type Ty = i32;
 }
 impl CustomInt<{ ControlTable::RealtimeTick as usize }> for () {
     type Ty = u16;
