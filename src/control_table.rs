@@ -2,6 +2,8 @@ use crate::data_spec::{self, DataSpec};
 use core::cell::Cell;
 use core::{marker, mem};
 
+
+/// XC330相当のデータ量を持つControlTableを定義する
 #[allow(dead_code)]
 pub enum ControlTable {
     ModelNumber,
@@ -587,7 +589,7 @@ impl ControlTable {
     }
 }
 
-const CONTROL_TABLE_SIZE: usize = 227;
+const CONTROL_TABLE_SIZE: usize = 231; // Dynamixel Wizardが大きめに読むのでアドレス終端の227よりも大きくする
 type Ux = [u8; CONTROL_TABLE_SIZE];
 pub struct ControlTableData {
     value: Cell<Ux>,

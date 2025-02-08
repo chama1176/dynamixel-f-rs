@@ -11,7 +11,7 @@ use core::result::Result;
 use core::time::Duration;
 use heapless::Vec;
 
-pub const MAX_PACKET_LEN: usize = 128;
+pub const MAX_PACKET_LEN: usize = 256;
 pub const BROADCAST_ID: u8 = 0xFE;
 
 #[allow(dead_code)]
@@ -1221,6 +1221,54 @@ mod tests {
         assert_eq!(dxl2.return_packet(), []);
         assert!(dxl1.uart.rx_buf.is_empty());
         assert!(dxl2.uart.rx_buf.is_empty());
+    }
+
+    #[test]
+    fn read_large_data(){
+        let mut mock_uart = MockSerial::new();
+        let mock_clock = MockClock::new();
+        let control_table_data = ControlTableData::new();
+        control_table_data.modify(|_, w| w.model_number().bits(0x0406));
+        control_table_data.modify(|_, w| w.firmware_version().bits(0x26));
+        control_table_data.modify(|_, w| w.id().bits(1));
+        control_table_data.modify(|_, w| w.present_position().bits(166));
+
+        let mut dxl =
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
+
+        // 受信するデータのテストケース
+        // Read Instruction Packet ID: 1, Present Position(132, 0x0084, 4[byte])
+        // let instruction = [
+        //     0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x02, 0x84, 0x00, 0x04, 0x00, 0x1D, 0x15,
+        // ];
+        let instruction = [
+            0xff, 0xff, 0xfd, 0x0, 0x1, 0x7, 0x0, 0x2, 0x0, 0x0, 0xe7, 0x0, 0x2d, 0xf
+        ];
+        for data in instruction {
+            dxl.uart.tx_buf.push_back(data).unwrap();
+        }
+        // パースを周期実行
+        assert_eq!(dxl.parse_data(), Ok(()));
+
+        // 返信すべき時間
+        assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
+        // 返信すべき内容
+        // ID1(XM430-W210) : Present Position(132, 0x0084, 4[byte]) = 166(0x000000A6)
+        // assert_eq!(
+        //     dxl.return_packet(),
+        //     [
+        //         0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x00, 0x55, 0x00, 0xA6, 0x00, 0x00, 0x00, 0x8C,
+        //         0xC0
+        //     ]
+        // );
+        // assert_eq!(
+        //     dxl.uart.rx_buf,
+        //     [
+        //         0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x00, 0x55, 0x00, 0xA6, 0x00, 0x00, 0x00, 0x8C,
+        //         0xC0
+        //     ]
+        // );
+
     }
 
     #[test]
