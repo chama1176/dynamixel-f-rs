@@ -547,7 +547,10 @@ where
 
                     if self.msg.len() < self.wait_length {
                         // check timeout
-                        if !timeout.is_zero() && self.clock.get_current_time() > timeout + self.receive_packet_start_time{
+                        if !timeout.is_zero()
+                            && self.clock.get_current_time()
+                                > timeout + self.receive_packet_start_time
+                        {
                             result = CommunicationResult::RxTimeout;
                             break;
                         } else {
@@ -578,7 +581,9 @@ where
                 }
             } else {
                 // check timeout
-                if !timeout.is_zero() && self.clock.get_current_time() > timeout + self.receive_packet_start_time{
+                if !timeout.is_zero()
+                    && self.clock.get_current_time() > timeout + self.receive_packet_start_time
+                {
                     result = CommunicationResult::RxTimeout;
                     break;
                 } else {
@@ -636,7 +641,7 @@ where
 
     fn read_response_packet(&self, id: u8, data: &[u8]) -> Vec<u8, MAX_PACKET_LEN> {
         let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
-        let length: u16 = 1 + 1 + 4 + 2; // instruction + err + data + crc(2)
+        let length: u16 = 1 + 1 + data.len() as u16 + 2; // instruction + err + data + crc(2)
 
         msg.extend(self.reserve_msg_header().iter().cloned());
         msg.push(id).unwrap();
@@ -874,8 +879,6 @@ mod tests {
             dxl.uart.rx_buf,
             [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D]
         );
-
-
     }
 
     #[test]
@@ -997,10 +1000,7 @@ mod tests {
             [0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x6F, 0x6D]
         );
         // データは用意されているがid1が先に返信するのを待つはず
-        assert_eq!(
-            dxl.uart.rx_buf,
-            []
-        );
+        assert_eq!(dxl.uart.rx_buf, []);
 
         // 時計を進める
         dxl.clock.tick();
@@ -1014,7 +1014,6 @@ mod tests {
             dxl.uart.rx_buf,
             [0xFF, 0xFF, 0xFD, 0x00, 0x02, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0x6F, 0x6D]
         );
-
     }
 
     #[test]
@@ -1224,7 +1223,48 @@ mod tests {
     }
 
     #[test]
-    fn read_large_data(){
+    fn read_long_data() {
+        let mut mock_uart = MockSerial::new();
+        let mock_clock = MockClock::new();
+        let control_table_data = ControlTableData::new();
+        control_table_data.modify(|_, w| w.model_number().bits(0x0406));
+        control_table_data.modify(|_, w| w.id().bits(1));
+
+        let mut dxl =
+            DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
+
+        // 受信するデータのテストケース
+        let instruction = [
+            0xff, 0xff, 0xfd, 0x0, 0x1, 0x7, 0x0, 0x2, 0x0, 0x0, 0x8, 0x0, 0x21, 0x6d,
+        ];
+
+        for data in instruction {
+            dxl.uart.tx_buf.push_back(data).unwrap();
+        }
+        // パースを周期実行
+        assert_eq!(dxl.parse_data(), Ok(()));
+
+        // 返信すべき時間
+        assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
+        // 返信すべき内容
+        assert_eq!(
+            dxl.return_packet(),
+            [
+                0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x0C, 0x00, 0x55, 0x00, 0x06, 0x04, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x01, 0x96, 0x0C,
+            ]
+        );
+        // assert_eq!(
+        //     dxl.uart.rx_buf,
+        //     [
+        //         0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x00, 0x55, 0x00, 0xA6, 0x00, 0x00, 0x00, 0x8C,
+        //         0xC0
+        //     ]
+        // );
+    }
+
+    #[test]
+    fn read_large_data() {
         let mut mock_uart = MockSerial::new();
         let mock_clock = MockClock::new();
         let control_table_data = ControlTableData::new();
@@ -1242,7 +1282,7 @@ mod tests {
         //     0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x02, 0x84, 0x00, 0x04, 0x00, 0x1D, 0x15,
         // ];
         let instruction = [
-            0xff, 0xff, 0xfd, 0x0, 0x1, 0x7, 0x0, 0x2, 0x0, 0x0, 0xe7, 0x0, 0x2d, 0xf
+            0xff, 0xff, 0xfd, 0x0, 0x1, 0x7, 0x0, 0x2, 0x0, 0x0, 0xe7, 0x0, 0x2d, 0xf,
         ];
         for data in instruction {
             dxl.uart.tx_buf.push_back(data).unwrap();
@@ -1253,7 +1293,6 @@ mod tests {
         // 返信すべき時間
         assert_eq!(dxl.packet_return_time(), Duration::new(0, 0));
         // 返信すべき内容
-        // ID1(XM430-W210) : Present Position(132, 0x0084, 4[byte]) = 166(0x000000A6)
         // assert_eq!(
         //     dxl.return_packet(),
         //     [
@@ -1268,7 +1307,6 @@ mod tests {
         //         0xC0
         //     ]
         // );
-
     }
 
     #[test]
@@ -1294,12 +1332,17 @@ mod tests {
     // fn calc_crc() {
     //     let mut mock_uart = MockSerial::new();
     //     let mock_clock = MockClock::new();
-    //     let dxl = DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200);
+    //     let control_table_data = ControlTableData::new();
+
+    //     let dxl = DynamixelProtocolHandler::new(mock_uart, mock_clock, 115200, control_table_data);
     //     let mut msg = Vec::<u8, MAX_PACKET_LEN>::new();
     //     msg.extend(
-    //         [0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x06, 0x02]
-    //             .iter()
-    //             .cloned(),
+    //         [
+    //             0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x0C, 0x00, 0x55, 0x00, 0x06, 0x04, 0x00, 0x00, 0x00,
+    //             0x00, 0x00, 0x01,
+    //         ]
+    //         .iter()
+    //         .cloned(),
     //     );
     //     assert_eq!(dxl.calc_crc_value(&msg), 0x0000);
     // }

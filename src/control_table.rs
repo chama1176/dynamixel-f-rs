@@ -2,7 +2,6 @@ use crate::data_spec::{self, DataSpec};
 use core::cell::Cell;
 use core::{marker, mem};
 
-
 /// XC330相当のデータ量を持つControlTableを定義する
 #[allow(dead_code)]
 pub enum ControlTable {
