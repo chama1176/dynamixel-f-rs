@@ -128,6 +128,7 @@ pub enum PacketReceivingState {
     Init,
 }
 
+#[allow(dead_code)]
 trait DynamixelPacket {
     fn add_stuffing(&mut self);
     fn remove_stuffing(&mut self);
@@ -351,7 +352,7 @@ where
                             self.parsing_state = ProtocolHandlerParsingState::WaitReturnDelayTime;
                         }
                         x if x == Instruction::SyncRead.into() => {
-                            let id_len = u16::from_le_bytes([
+                            let _id_len = u16::from_le_bytes([
                                 v[Packet::LengthL.to_pos()],
                                 v[Packet::LengthH.to_pos()],
                             ]) as usize

@@ -1,6 +1,7 @@
 use core::cell::Cell;
 use core::marker;
 
+#[allow(dead_code)]
 /// Raw data type
 pub trait DataSpec {
     /// Raw register type (`u8`, `u16`, `u32`, ...).
@@ -31,12 +32,14 @@ pub trait DataSpec {
 ///
 /// This value is the initial value for the `write` method. It can also be directly written to the
 /// register by using the `reset` method.
+#[allow(dead_code)]
 pub trait Resettable: DataSpec {
     /// Reset value of the register.
     fn reset_value() -> Self::Ux;
 }
 
 /// This structure provides volatile access to registers.
+#[allow(dead_code)]
 #[repr(transparent)]
 pub struct Data<D: DataSpec> {
     data: Cell<D::Ux>,

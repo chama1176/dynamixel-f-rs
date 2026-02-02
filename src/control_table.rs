@@ -1142,7 +1142,7 @@ impl W {
     }
     pub fn model_number(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::ModelNumber as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::ModelNumber as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::ModelNumber,
@@ -1151,7 +1151,7 @@ impl W {
     }
     pub fn model_information(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::ModelInformation as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::ModelInformation as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::ModelInformation,
@@ -1160,14 +1160,14 @@ impl W {
     }
     pub fn firmware_version(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::FirmwareVersion as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::FirmwareVersion as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::FirmwareVersion,
             _type: marker::PhantomData,
         }
     }
-    pub fn id(&mut self) -> BaseW<<() as CustomInt<{ ControlTable::ID as usize }>>::Ty> {
+    pub fn id(&mut self) -> BaseW<'_, <() as CustomInt<{ ControlTable::ID as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::ID,
@@ -1176,7 +1176,7 @@ impl W {
     }
     pub fn baud_rate(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::BaudRate as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::BaudRate as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::BaudRate,
@@ -1185,7 +1185,7 @@ impl W {
     }
     pub fn return_delay_time(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::ReturnDelayTime as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::ReturnDelayTime as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::ReturnDelayTime,
@@ -1194,7 +1194,7 @@ impl W {
     }
     pub fn drive_mode(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::DriveMode as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::DriveMode as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::DriveMode,
@@ -1203,7 +1203,7 @@ impl W {
     }
     pub fn operating_mode(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::OperatingMode as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::OperatingMode as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::OperatingMode,
@@ -1212,7 +1212,7 @@ impl W {
     }
     pub fn secondary_id(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::SecondaryID as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::SecondaryID as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::SecondaryID,
@@ -1221,7 +1221,7 @@ impl W {
     }
     pub fn protocol_type(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::ProtocolType as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::ProtocolType as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::ProtocolType,
@@ -1230,7 +1230,7 @@ impl W {
     }
     pub fn homing_offset(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::HomingOffset as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::HomingOffset as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::HomingOffset,
@@ -1239,7 +1239,7 @@ impl W {
     }
     pub fn moving_threshold(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::MovingThreshold as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::MovingThreshold as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::MovingThreshold,
@@ -1248,7 +1248,7 @@ impl W {
     }
     pub fn temperature_limit(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::TemperatureLimit as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::TemperatureLimit as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::TemperatureLimit,
@@ -1257,7 +1257,7 @@ impl W {
     }
     pub fn max_voltage_limit(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::MaxVoltageLimit as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::MaxVoltageLimit as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::MaxVoltageLimit,
@@ -1266,7 +1266,7 @@ impl W {
     }
     pub fn min_voltage_limit(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::MinVoltageLimit as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::MinVoltageLimit as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::MinVoltageLimit,
@@ -1275,7 +1275,7 @@ impl W {
     }
     pub fn pwm_limit(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::PWMLimit as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::PWMLimit as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::PWMLimit,
@@ -1284,7 +1284,7 @@ impl W {
     }
     pub fn current_limit(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::CurrentLimit as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::CurrentLimit as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::CurrentLimit,
@@ -1293,7 +1293,7 @@ impl W {
     }
     pub fn velocity_limit(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::VelocityLimit as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::VelocityLimit as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::VelocityLimit,
@@ -1302,7 +1302,7 @@ impl W {
     }
     pub fn max_position_limit(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::MaxPositionLimit as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::MaxPositionLimit as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::MaxPositionLimit,
@@ -1311,7 +1311,7 @@ impl W {
     }
     pub fn min_position_limit(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::MinPositionLimit as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::MinPositionLimit as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::MinPositionLimit,
@@ -1320,7 +1320,7 @@ impl W {
     }
     pub fn startup_configuration(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::StartupConfiguration as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::StartupConfiguration as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::StartupConfiguration,
@@ -1329,7 +1329,7 @@ impl W {
     }
     pub fn pwm_slope(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::PWMSlope as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::PWMSlope as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::PWMSlope,
@@ -1338,7 +1338,7 @@ impl W {
     }
     pub fn shutdown(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::Shutdown as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::Shutdown as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::Shutdown,
@@ -1347,7 +1347,7 @@ impl W {
     }
     pub fn torque_enable(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::TorqueEnable as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::TorqueEnable as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::TorqueEnable,
@@ -1355,7 +1355,7 @@ impl W {
         }
     }
 
-    pub fn led(&mut self) -> BaseW<<() as CustomInt<{ ControlTable::LED as usize }>>::Ty> {
+    pub fn led(&mut self) -> BaseW<'_, <() as CustomInt<{ ControlTable::LED as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::LED,
@@ -1364,7 +1364,7 @@ impl W {
     }
     pub fn status_return_level(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::StatusReturnLevel as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::StatusReturnLevel as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::StatusReturnLevel,
@@ -1373,7 +1373,7 @@ impl W {
     }
     pub fn registered_instruction(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::RegisteredInstruction as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::RegisteredInstruction as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::RegisteredInstruction,
@@ -1382,7 +1382,7 @@ impl W {
     }
     pub fn hardware_error_status(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::HardwareErrorStatus as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::HardwareErrorStatus as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::HardwareErrorStatus,
@@ -1391,7 +1391,7 @@ impl W {
     }
     pub fn velocity_igain(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::VelocityIGain as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::VelocityIGain as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::VelocityIGain,
@@ -1400,7 +1400,7 @@ impl W {
     }
     pub fn velocity_pgain(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::VelocityPgain as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::VelocityPgain as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::VelocityPgain,
@@ -1409,7 +1409,7 @@ impl W {
     }
     pub fn position_dgain(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::PositionDGain as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::PositionDGain as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::PositionDGain,
@@ -1418,7 +1418,7 @@ impl W {
     }
     pub fn position_igain(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::PositionIGain as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::PositionIGain as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::PositionIGain,
@@ -1427,7 +1427,7 @@ impl W {
     }
     pub fn position_pgain(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::PositionPGain as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::PositionPGain as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::PositionPGain,
@@ -1436,7 +1436,7 @@ impl W {
     }
     pub fn feedforward2nd_gain(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::Feedforward2ndGain as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::Feedforward2ndGain as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::Feedforward2ndGain,
@@ -1445,7 +1445,7 @@ impl W {
     }
     pub fn feedforward1st_gain(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::Feedforward1stGain as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::Feedforward1stGain as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::Feedforward1stGain,
@@ -1454,14 +1454,14 @@ impl W {
     }
     pub fn bus_watchdog(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::BusWatchdog as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::BusWatchdog as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::BusWatchdog,
             _type: marker::PhantomData,
         }
     }
-    pub fn goal_pwm(&mut self) -> BaseW<<() as CustomInt<{ ControlTable::GoalPWM as usize }>>::Ty> {
+    pub fn goal_pwm(&mut self) -> BaseW<'_, <() as CustomInt<{ ControlTable::GoalPWM as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::GoalPWM,
@@ -1470,7 +1470,7 @@ impl W {
     }
     pub fn goal_current(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::GoalCurrent as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::GoalCurrent as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::GoalCurrent,
@@ -1479,7 +1479,7 @@ impl W {
     }
     pub fn goal_velocity(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::GoalVelocity as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::GoalVelocity as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::GoalVelocity,
@@ -1488,7 +1488,7 @@ impl W {
     }
     pub fn profile_accleration(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::ProfileAccleration as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::ProfileAccleration as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::ProfileAccleration,
@@ -1497,7 +1497,7 @@ impl W {
     }
     pub fn profile_velocity(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::ProfileVelocity as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::ProfileVelocity as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::ProfileVelocity,
@@ -1506,7 +1506,7 @@ impl W {
     }
     pub fn goal_position(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::GoalPosition as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::GoalPosition as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::GoalPosition,
@@ -1515,14 +1515,14 @@ impl W {
     }
     pub fn realtime_tick(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::RealtimeTick as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::RealtimeTick as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::RealtimeTick,
             _type: marker::PhantomData,
         }
     }
-    pub fn moving(&mut self) -> BaseW<<() as CustomInt<{ ControlTable::Moving as usize }>>::Ty> {
+    pub fn moving(&mut self) -> BaseW<'_, <() as CustomInt<{ ControlTable::Moving as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::Moving,
@@ -1531,7 +1531,7 @@ impl W {
     }
     pub fn moving_status(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::MovingStatus as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::MovingStatus as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::MovingStatus,
@@ -1540,7 +1540,7 @@ impl W {
     }
     pub fn present_pwm(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::PresentPWM as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::PresentPWM as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::PresentPWM,
@@ -1549,7 +1549,7 @@ impl W {
     }
     pub fn present_current(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::PresentCurrent as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::PresentCurrent as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::PresentCurrent,
@@ -1558,7 +1558,7 @@ impl W {
     }
     pub fn present_velocity(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::PresentVelocity as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::PresentVelocity as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::PresentVelocity,
@@ -1567,7 +1567,7 @@ impl W {
     }
     pub fn present_position(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::PresentPosition as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::PresentPosition as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::PresentPosition,
@@ -1576,7 +1576,7 @@ impl W {
     }
     pub fn velocity_trajectory(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::VelocityTrajectory as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::VelocityTrajectory as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::VelocityTrajectory,
@@ -1585,7 +1585,7 @@ impl W {
     }
     pub fn position_trajectory(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::PositionTrajectory as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::PositionTrajectory as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::PositionTrajectory,
@@ -1594,7 +1594,7 @@ impl W {
     }
     pub fn present_input_voltage(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::PresentInputVoltage as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::PresentInputVoltage as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::PresentInputVoltage,
@@ -1603,7 +1603,7 @@ impl W {
     }
     pub fn present_temperature(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::PresentTemperature as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::PresentTemperature as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::PresentTemperature,
@@ -1612,7 +1612,7 @@ impl W {
     }
     pub fn backup_ready(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::BackupReady as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::BackupReady as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::BackupReady,
@@ -1621,7 +1621,7 @@ impl W {
     }
     pub fn indirect_address1(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress1 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress1 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress1,
@@ -1630,7 +1630,7 @@ impl W {
     }
     pub fn indirect_address2(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress2 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress2 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress2,
@@ -1639,7 +1639,7 @@ impl W {
     }
     pub fn indirect_address3(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress3 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress3 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress3,
@@ -1648,7 +1648,7 @@ impl W {
     }
     pub fn indirect_address4(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress4 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress4 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress4,
@@ -1657,7 +1657,7 @@ impl W {
     }
     pub fn indirect_address5(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress5 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress5 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress5,
@@ -1666,7 +1666,7 @@ impl W {
     }
     pub fn indirect_address6(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress6 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress6 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress6,
@@ -1675,7 +1675,7 @@ impl W {
     }
     pub fn indirect_address7(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress7 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress7 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress7,
@@ -1684,7 +1684,7 @@ impl W {
     }
     pub fn indirect_address8(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress8 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress8 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress8,
@@ -1693,7 +1693,7 @@ impl W {
     }
     pub fn indirect_address9(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress9 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress9 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress9,
@@ -1702,7 +1702,7 @@ impl W {
     }
     pub fn indirect_address10(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress10 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress10 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress10,
@@ -1711,7 +1711,7 @@ impl W {
     }
     pub fn indirect_address11(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress11 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress11 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress11,
@@ -1720,7 +1720,7 @@ impl W {
     }
     pub fn indirect_address12(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress12 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress12 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress12,
@@ -1729,7 +1729,7 @@ impl W {
     }
     pub fn indirect_address13(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress13 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress13 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress13,
@@ -1738,7 +1738,7 @@ impl W {
     }
     pub fn indirect_address14(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress14 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress14 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress14,
@@ -1747,7 +1747,7 @@ impl W {
     }
     pub fn indirect_address15(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress15 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress15 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress15,
@@ -1756,7 +1756,7 @@ impl W {
     }
     pub fn indirect_address16(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress16 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress16 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress16,
@@ -1765,7 +1765,7 @@ impl W {
     }
     pub fn indirect_address17(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress17 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress17 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress17,
@@ -1774,7 +1774,7 @@ impl W {
     }
     pub fn indirect_address18(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress18 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress18 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress18,
@@ -1783,7 +1783,7 @@ impl W {
     }
     pub fn indirect_address19(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress19 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress19 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress19,
@@ -1792,7 +1792,7 @@ impl W {
     }
     pub fn indirect_address20(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectAddress20 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectAddress20 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectAddress20,
@@ -1801,7 +1801,7 @@ impl W {
     }
     pub fn indirect_data1(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData1 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData1 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData1,
@@ -1810,7 +1810,7 @@ impl W {
     }
     pub fn indirect_data2(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData2 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData2 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData2,
@@ -1819,7 +1819,7 @@ impl W {
     }
     pub fn indirect_data3(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData3 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData3 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData3,
@@ -1828,7 +1828,7 @@ impl W {
     }
     pub fn indirect_data4(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData4 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData4 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData4,
@@ -1837,7 +1837,7 @@ impl W {
     }
     pub fn indirect_data5(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData5 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData5 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData5,
@@ -1846,7 +1846,7 @@ impl W {
     }
     pub fn indirect_data6(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData6 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData6 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData6,
@@ -1855,7 +1855,7 @@ impl W {
     }
     pub fn indirect_data7(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData7 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData7 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData7,
@@ -1864,7 +1864,7 @@ impl W {
     }
     pub fn indirect_data8(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData8 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData8 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData8,
@@ -1873,7 +1873,7 @@ impl W {
     }
     pub fn indirect_data9(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData9 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData9 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData9,
@@ -1882,7 +1882,7 @@ impl W {
     }
     pub fn indirect_data10(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData10 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData10 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData10,
@@ -1891,7 +1891,7 @@ impl W {
     }
     pub fn indirect_data11(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData11 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData11 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData11,
@@ -1900,7 +1900,7 @@ impl W {
     }
     pub fn indirect_data12(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData12 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData12 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData12,
@@ -1909,7 +1909,7 @@ impl W {
     }
     pub fn indirect_data13(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData13 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData13 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData13,
@@ -1918,7 +1918,7 @@ impl W {
     }
     pub fn indirect_data14(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData14 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData14 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData14,
@@ -1927,7 +1927,7 @@ impl W {
     }
     pub fn indirect_data15(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData15 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData15 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData15,
@@ -1936,7 +1936,7 @@ impl W {
     }
     pub fn indirect_data16(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData16 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData16 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData16,
@@ -1945,7 +1945,7 @@ impl W {
     }
     pub fn indirect_data17(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData17 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData17 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData17,
@@ -1954,7 +1954,7 @@ impl W {
     }
     pub fn indirect_data18(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData18 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData18 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData18,
@@ -1963,7 +1963,7 @@ impl W {
     }
     pub fn indirect_data19(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData19 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData19 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData19,
@@ -1972,7 +1972,7 @@ impl W {
     }
     pub fn indirect_data20(
         &mut self,
-    ) -> BaseW<<() as CustomInt<{ ControlTable::IndirectData20 as usize }>>::Ty> {
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::IndirectData20 as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::IndirectData20,
