@@ -1461,7 +1461,9 @@ impl W {
             _type: marker::PhantomData,
         }
     }
-    pub fn goal_pwm(&mut self) -> BaseW<'_, <() as CustomInt<{ ControlTable::GoalPWM as usize }>>::Ty> {
+    pub fn goal_pwm(
+        &mut self,
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::GoalPWM as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::GoalPWM,
@@ -1522,7 +1524,9 @@ impl W {
             _type: marker::PhantomData,
         }
     }
-    pub fn moving(&mut self) -> BaseW<'_, <() as CustomInt<{ ControlTable::Moving as usize }>>::Ty> {
+    pub fn moving(
+        &mut self,
+    ) -> BaseW<'_, <() as CustomInt<{ ControlTable::Moving as usize }>>::Ty> {
         BaseW {
             w: self,
             ct: ControlTable::Moving,
